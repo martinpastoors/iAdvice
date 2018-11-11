@@ -1,0 +1,584 @@
+---
+output: 
+  word_document:
+    reference_docx: "C:/Users/Martin Pastoors/AppData/Roaming/Microsoft/Templates/Normal.dotm"
+---
+
+```{r setup, include=FALSE}
+# -----------------------------------------------------------------------------------------------
+# ICES historical assessment analysis.Rmd
+#
+# stocknames: lookup list to transfer old and new stock names
+# stocklist : stock list with stock description and advice status by assessment year
+# speciesdb : properties of species (names etc.)
+# stockdb   : properties of stocks
+# sagdb     : stock assessment database (by stock, assessmentyear and year)
+#
+# 30/03/2017 first coding during HAWG
+# 07/07/2017 adapted for downloading as csv file
+# 14/07/2017 integrated the new and old stocknames; only data download and storage as rdata files
+# 20/07/2017 thorough checking of databases and making sure all items are filled and OK
+# 01/08/2017 added a number of diagnostic graphs; redone the excel database for nephrops
+# 01/08/2017 added the stock assessment methods from stock advice database
+# 10/08/2017 moved checking routines to separate code
+# 11/08/2017 adapted for R3.4.1 and Tidyverse
+# 14/08/2017 added assessmentmodel and assessmenttype categories
+# 29/08/2017 converted to rmarkdown document
+# -----------------------------------------------------------------------------------------------
+
+rm(list=ls())
+
+require("knitr")
+knitr::opts_chunk$set(crop = TRUE, echo = FALSE, message=FALSE, warning=FALSE)
+knit_hooks$set(crop = hook_pdfcrop)
+opts_knit$set(root.dir="D:/Dropbox/ICES Assessment database")
+
+# Libraries
+library(rmarkdown)
+
+library(tidyverse) # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(RColorBrewer) # colours
+
+library(icesSD)    # ICES Stock database
+library(icesSAG)   # ICES Stock Assessment Graphs
+
+# Load utils code
+source("D:/XXX/PRF/r/my_utils.r")
+
+
+```
+
+
+# Generating and analyzing the ICES historical assessment database
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+## Introduction
+
+Ambition: bringing together the ICES historical assessment database and the ICES webservices for the Standard Assessment Graphs (SAG). 
+
+The ICES historical assessment database was originally started by Martin Pastoors already in the early 2000s and later maintained by the ICES secretariat (Barbara Schoute) by collecting the annual assessment results from the standard graph database into an overall excel file. This was used to generate e.g. the historical spaghetti plots in the ACFM and later ACOM advice, before it was taken over by the SAG database. 
+
+In addition, there is the ICES Advice Database (IAD) which has been set up about five years ago to attempt to capture the ICES advice in combinations with metadata on the short term forecast, reference points and assessment methods. This will be used here to contribute some information on reference points and assessment methods. The advice part will not come into play (yet). 
+
+Ultimately the intention is to evaluate the long term historical performance of stock assessments and to consider variability, bias and changes in perception in relation to methods, benchmarks and other explanatory variables. 
+
+For now, the focus is on the method of combining the data from different sources. 
+
+## The first challenge
+
+The first challenge is to agree on the names for the stocks. Recently ICES has renamed all the stocks to a new name that is more consistent with the area distribution, but also much more difficult to remember. Think about the move from **hom-west** to **hom.27.2a4a5b6a7a-ce-k8**. In order to maintain cohesion in the historical assessment database, a translation key is used to be able to convert old names to new names and vice versa. 
+
+```{r initialization, echo=TRUE, message=FALSE, warning=FALSE}
+stocknames <-
+  read.csv("D:/Dropbox/ICES Assessment database/ICES StocksOldCodesNewCodesEGs.csv", 
+           stringsAsFactors = FALSE) %>% 
+  select(1,2) %>% 
+  setNames(., c("fishstockold","fishstock")) 
+glimpse(stocknames)
+```
+
+## Getting information on stock assessment process and reference points from the ICES Advice Database
+
+The ICES Advice Database (IAD) is a database set up by Martin Pastoors to capture the advice tables in the advisory reports. To this have been added: information on short term forecasts, information on reference points and information on the assessment process. Here we will only use the reference points and the assessment methods. 
+
+```{r iad, echo=TRUE, message=FALSE, warning=FALSE}
+load(file="../ICES advice database/rdata/iad.RData")
+iad <-
+  iad %>% 
+  select(fishstock, assessmentyear, assessmentmodel = assessmodel,
+         flim, fpa, fmsy, blim, bpa, msybtrig,
+         firstyearofdata, ncpueseries, nsurveyseries, 
+         assessmenttype=assesstype, assessmentcomment=assesscomment) %>% 
+  filter(!is.na(assessmentmodel), assessmentmodel != "")
+glimpse(iad)
+```
+
+
+
+
+## Turning to the ICES webservices
+
+So what is actually in the ICES webservices for Stock Assessment Graphs (or at least what I could find in it):
+
+* icesSD::getSD (Get Stock List Data). 
+* icesSAG::getListStocks (Again a list of stocks with properties; overlap with getSD?)
+* icesSAG::getSAG(..., data="refpts", ...) (Reference points)
+* icesSAG::getSAG(..., data="summary", ...) (Assessment results)
+
+## Get Stock List Data (getSD)
+
+The Stock List Data consists of information that is specific to species (e.g. scientific name, common name, fisheries guild etc.) that does not change over time and information on stocks that is year specific (advice type, assessment method, section etc.). In the analysis I have split them into two separate datasets. First I read in the overall stock list data
+
+```{r getsd, echo=TRUE, message=FALSE, warning=FALSE}
+s <-
+  icesSD::getSD() %>%
+  lowcase %>%
+  rename(fishstock      = stockkeylabel,
+         assessmentyear = activeyear,
+         scientificname = speciesscientificname,
+         commonname     = speciescommonname) %>%
+  mutate   (fishstock   = gsub(" ", "", fishstock))
+glimpse(s)
+```
+
+Then I have created a separate species database (not by year):
+
+```{r speciesdb, echo=TRUE, message=FALSE, warning=FALSE}
+speciesdb <-
+  readxl::read_excel(path="downloads/species_list.xlsx", col_names=TRUE, col_types="text") %>%
+  mutate_at(c("commonname","trophicguild","fisheriesguild","sizeguild"), funs(tolower)) %>%
+  group_by(faocode, scientificname, commonname) %>%
+  filter(row_number() == 1) %>%
+  select(faocode, scientificname, commonname, trophicguild, fisheriesguild, sizeguild) %>%
+  arrange(faocode) %>%
+  filter(!is.na(faocode) & !is.na(scientificname) & !is.na(commonname))
+glimpse(speciesdb)
+```
+
+And a dataset by stock
+
+```{r stockdb, echo=TRUE, message=FALSE, warning=FALSE}
+stockdb <-
+  s %>%
+  mutate(faocode = substr(fishstock,1,3)) %>%
+  select(fishstock, assessmentyear, ecoregion, expertgroup, advicedraftinggroup, datacategory,
+         assessmentfrequency, assessmenttype, advicecategory, advicetype, useofdiscardsinadvice,
+         pabufferapplied) %>%
+
+  # lowercase and remove na text strings
+  mutate_at(vars("assessmenttype","advicecategory","advicetype",
+                 "useofdiscardsinadvice", "pabufferapplied"), funs(tolower)) %>%
+  mutate(assessmenttype  = ifelse(assessmenttype == "na",NA, assessmenttype),
+         pabufferapplied = ifelse(pabufferapplied == "na", NA, pabufferapplied)) %>% 
+  rename(assessmentmodel = assessmenttype)
+glimpse(stockdb)
+```
+
+## icesSAG
+
+However, icesSAG also has a stock list 
+
+```{r stocklist, echo=TRUE, message=FALSE, warning=FALSE}
+# p <- icesSAG::getListStocks(year=myyear)
+
+# shortcut
+p <- read.csv(file="downloads/stocklist.csv", stringsAsFactors = FALSE)
+glimpse(p)
+
+stocklist <-
+  p %>%
+  lowcase %>%
+  rename(fishstock = stockkeylabel) %>%
+  select(fishstock, assessmentyear, stockdescription, status)
+glimpse(stocklist)
+```
+
+Then we get to the reference points (straightforward)
+
+```{r refpoints, echo=TRUE, message=FALSE, warning=FALSE}
+# t <- getSAG(stock=NULL, year=0, data="refpts", combine=TRUE) 
+
+# shortcut
+t <- read.csv(file="downloads/refpoints.csv", stringsAsFactors = FALSE)
+refpoints <-
+  t %>%
+  lowcase %>%
+  rename(fishstock = stockkeylabel) %>%
+  dplyr::select(fishstock, assessmentyear,
+                flim, blim, fmsy, msybtrigger, fpa, bpa,
+                fmgt=fmanagement, bmgt=bmanagement,
+                recruitmentage) %>%
+  mutate_at(vars(flim:bmgt), funs(as.numeric))
+glimpse(refpoints)
+```
+
+And then to the piece-de-resistance: the stock assessment database. After reading the database we factor in all the previous datasets to create one overall dataset of all available information by stocks, assessmentyear and year. 
+
+```{r sagdownload, echo=TRUE, message=FALSE, warning=FALSE}
+# sagdownload <- icesSAG::getSAG(stock=NULL, year=0, data="summary", combine=TRUE)
+
+# shortcut
+sagdownload <- 
+  read.csv(file="downloads/sagdownload.csv", stringsAsFactors =FALSE) %>% 
+  lowcase %>% 
+  dplyr:: select(fishstock, assessmentyear, year,
+                 recruitment, highrecruitment, lowrecruitment,
+                 ssb, highssb, lowssb,
+                 f, highf, lowf, 
+                 catches, landings, discards,
+                 fage, 
+                 units, 
+                 stocksizedescription, stocksizeunits,
+                 fishingpressuredescription, fishingpressureunits,
+                 stockpublishnote) %>% 
+  
+  # add fao code if missing (NEEDS A MORE SOFISTICATED APPROACH)
+  mutate(faocode = substr(fishstock,1,3)) %>% 
+  
+  # dealing with old and new stocknames
+  left_join(stocknames, by = c("fishstock" = "fishstockold")) %>% 
+  rename(fishstocknew = fishstock.y) %>% 
+  left_join(stocknames, by = c("fishstock")) %>% 
+  mutate(fishstocknew = ifelse(is.na(fishstocknew) & !is.na(fishstockold), fishstock, fishstocknew),
+         fishstockold = ifelse(is.na(fishstockold) & !is.na(fishstocknew), fishstock, fishstockold),
+         fishstockold = ifelse(is.na(fishstockold) & is.na(fishstocknew) , fishstock, fishstockold)) %>% 
+  mutate_at(vars("stocksizedescription","stocksizeunits","fishingpressuredescription",
+                 "fishingpressureunits"), funs(tolower)) %>% 
+  
+  
+  # join relevant datasets
+  left_join(refpoints, by=c("fishstock","assessmentyear")) %>% 
+  left_join(stocklist, by=c("fishstock","assessmentyear")) %>% 
+  left_join(stockdb  , by=c("fishstock","assessmentyear")) %>% 
+  left_join(speciesdb, by=c("faocode")) %>% 
+  left_join(iad,       by=c("fishstock","assessmentyear")) %>% 
+  
+  mutate(source   = "download", 
+         flim     = ifelse(!is.na(flim.x), flim.x, flim.y),
+         fpa      = ifelse(!is.na(fpa.x),  fpa.x, fpa.y),
+         fmsy     = ifelse(!is.na(fmsy.x), fmsy.x, fmsy.y),
+         blim     = ifelse(is.na(blim.x),  blim.x, blim.y),
+         bpa      = ifelse(is.na(bpa.x),   bpa.x, bpa.y),
+         msybtrig = ifelse(is.na(msybtrigger),  msybtrigger, msybtrig),
+         assessmentmodel = ifelse(!is.na(assessmentmodel.y), assessmentmodel.y, assessmentmodel.x) ) %>% 
+  
+  select(-flim.x, -flim.y, -fpa.x, -fpa.y, -fmsy.x, -fmsy.y, -blim.x, -blim.y, -bpa.x, -bpa.y, 
+         -msybtrigger, -assessmentmodel.x, -assessmentmodel.y) %>% 
+ data.frame() 
+glimpse(sagdownload)
+```
+
+
+## ICES historical assessment database
+
+The ICES historical assessment database consists of a large excel spreadsheet with the historial stock assessment of many stocks sometimes going back to the mid 1990s. 
+
+```{r sagexcel, echo=TRUE, message=FALSE, warning=FALSE}
+sagexcel <-
+  readxl::read_excel("ICES Assessment Summary database.xlsx",
+             sheet = "DATA", col_names = TRUE, col_types = "text", skip = 0) %>%
+  lowcase %>%
+  rename(assessmentyear = assyear) %>% 
+  mutate(fishstock = tolower(fishstock)) %>%
+  mutate_at(vars("year","assessmentyear"), funs(as.integer)) %>% 
+  mutate_at(vars("lowrecruitment", "recruitment","highrecruitment",
+                 "lowssb","ssb","highssb",
+                 "lowf", "f","highf",
+                 "landings","catches","discards","ibc",
+                 "flim","fpa","fmsy", "fmanagement",
+                 "blim","bpa","msybtrigger","bmanagement",
+                 "recruitmentage","recruitmentlength"), funs(as.numeric)) %>% 
+  select(-contains("custom")) %>% 
+  rename(scientificname = speciesname,
+         commonname     = sgname,
+         fmgt           = fmanagement,
+         bmgt           = bmanagement,
+         faocode        = species) %>% 
+  
+  # dealing with old and new stocknames
+  left_join(stocknames, by = c("fishstock" = "fishstockold")) %>% 
+  rename(fishstocknew = fishstock.y) %>% 
+  left_join(stocknames, by = c("fishstock")) %>% 
+  mutate(fishstocknew = ifelse(is.na(fishstocknew) & !is.na(fishstockold), fishstock, fishstocknew),
+         fishstockold = ifelse(is.na(fishstockold) & !is.na(fishstocknew), fishstock, fishstockold),
+         fishstockold = ifelse(is.na(fishstockold) & is.na(fishstocknew) , fishstock, fishstockold)) %>% 
+  
+  
+  mutate_at(vars("stocksizedescription","stocksizeunits","fishingpressuredescription",
+                 "fishingpressureunits","commonname", "scientificname"), funs(tolower)) %>% 
+  select(-assessmentkey, -icesareas, -report, -(unitofrecruitment:tbiomassunit), 
+         -catcheslandingsunits, -officiallandings, -(ibc:yieldssb), -(flandings:funallocated), 
+         -(flength:area), -scientificname, -commonname) %>% 
+  filter(year <= assessmentyear) %>% 
+  
+  # add fao code if missing
+  mutate(faocode = substr(fishstock,1,3)) %>% 
+  
+  # add species information
+  left_join(speciesdb, by=c("faocode")) %>% 
+  
+  # add ICES Advice Database information
+  select(-blim, -bpa, -msybtrigger,-flim, -fpa, -fmsy) %>% 
+  left_join(iad, by=c("fishstock","assessmentyear")) %>% 
+  
+  mutate(source = "excel") 
+glimpse(sagexcel)
+```
+
+## Combining the ICES historical assessment database with the SAG download database
+
+First step: we create unique combinations of fishstock and assessment year for each of the two databases
+
+```{r uniquesets, echo=TRUE, message=FALSE, warning=FALSE}
+sagdownload_unique <-
+  sagdownload %>% 
+  group_by(fishstock, assessmentyear) %>% 
+  filter(row_number()==1) %>% 
+  select(fishstock, assessmentyear)
+
+sagexcel_unique <-
+  sagexcel %>% 
+  group_by(fishstock, assessmentyear) %>% 
+  filter(row_number()==1) %>% 
+  select(fishstock, assessmentyear)
+```
+
+And then we calculate the which combinations of fishstock and assessment year are not already included in the SAG download but are available in the Excel version. 
+
+```{r exceltoadd, echo=TRUE, message=FALSE, warning=FALSE}
+sagexcel_toadd <-
+  setdiff(sagexcel_unique,sagdownload_unique) %>% 
+  left_join(sagexcel, by=c("fishstock","assessmentyear")) %>% 
+  data.frame()
+```
+
+Finally we add the 'excel' data to the downloaded data and there are a number of cleanup actions to deal with some of the inconsistencies in the database (notably naming of methods, stocksize description etc. )
+
+```{r sagdb, echo=TRUE, message=FALSE, warning=FALSE}
+sagdb <- 
+  rbind.all.columns(sagdownload, sagexcel_toadd) %>%  
+
+  # corrections to stock size descriptions
+  mutate(
+    stocksizedescription = gsub("stock size: "                 ,""                   , stocksizedescription),
+    stocksizedescription = gsub("indices"                      ,"index"              , stocksizedescription),
+    stocksizedescription = gsub("indicator"                    ,"index"              , stocksizedescription),
+    stocksizedescription = gsub("^biomass$"                    ,"total biomass index", stocksizedescription),
+    stocksizedescription = gsub("^biomass index$"              ,"total biomass index", stocksizedescription),
+    stocksizedescription = gsub("^evhoe biomass index$"        ,"total biomass index", stocksizedescription),
+    stocksizedescription = gsub("^stock size index: abundance$","abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^abundance$"                  ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^density$"                    ,"density index"      , stocksizedescription),
+    stocksizedescription = gsub("^tsb$"                        ,"total biomass"      , stocksizedescription),
+    stocksizedescription = gsub("^total abundance index$"      ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^index$"                      ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^stock abundance$"            ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^density index$"              ,"abundance index"    , stocksizedescription),
+    
+    stocksizedescription = gsub("stock size index: biomass \\(ages 1-8\\)"   ,"total biomass index"      , stocksizedescription),
+    stocksizedescription = gsub("stock size index: german survey"            ,"total biomass index"      , stocksizedescription),
+    stocksizedescription = gsub("stock size index: smoothed greenland index" ,"total biomass index"      , stocksizedescription),
+    
+    stocksizedescription = ifelse(grepl("tv",stocksizedescription), "abundance index", stocksizedescription),
+    stocksizedescription = ifelse(grepl("ssb & b",stocksizedescription) , "ssb", stocksizedescription),
+    stocksizedescription = ifelse(grepl("total biomass/bmsy",stocksizedescription) , "b/bmsy", stocksizedescription),
+    stocksizedescription = ifelse(stocksizedescription == "stock size" & stocksizeunits == "tonnes", "ssb", stocksizedescription),
+    stocksizedescription = ifelse(stocksizedescription == "stock size" & grepl("kg/",stocksizeunits), "total biomass index", stocksizedescription),
+    stocksizedescription = ifelse(grepl("relative", stocksizeunits, fixed=TRUE) & is.na(stocksizedescription), "total biomass index", stocksizedescription)
+  ) %>% 
+  
+  # corrections to stock units
+  mutate(
+    stocksizeunits = gsub("stock size: "                 ,""                   , stocksizeunits),
+    stocksizeunits = gsub(" ", "", stocksizeunits),
+    stocksizeunits = gsub("density(burrows/m2)", "burrows/m2", stocksizeunits, fixed=TRUE),
+    stocksizeunits = gsub("cpue(kg/1000hooks)", "kg/1000hooks", stocksizeunits, fixed=TRUE),
+    stocksizeunits = gsub("^abundance$", "millions", stocksizeunits),
+    stocksizeunits = gsub("na(ratio)", "relative", stocksizeunits, fixed=TRUE),
+    stocksizeunits = ifelse(grepl("kg/h", stocksizeunits, fixed=TRUE), "kg/hour", stocksizeunits),
+    stocksizeunits = ifelse(grepl("n/h", stocksizeunits, fixed=TRUE), "n/hour", stocksizeunits)
+  ) %>% 
+  
+  # corrections to fishing pressure descriptions
+  mutate(
+    fishingpressuredescription = gsub("fishing pressure: ",""  , fishingpressuredescription),
+    fishingpressuredescription = gsub(" ",""  , fishingpressuredescription),
+    fishingpressuredescription = gsub("f&hr","f"  , fishingpressuredescription, fixed=TRUE),
+    fishingpressuredescription = gsub("fishingpressure","f"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("finwinterrings","f"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("weightedf","f"  , fishingpressuredescription), 
+    
+    fishingpressuredescription = gsub("harvestrate","hr"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("relativehr","hr/index"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("hrindex","hr/index"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("relativeexploitationrate","hr/index"  , fishingpressuredescription), 
+    
+    fishingpressuredescription = ifelse(grepl("ages",fishingpressuredescription), "f", fishingpressuredescription),
+    fishingpressuredescription = ifelse(grepl("null",fishingpressuredescription), NA, fishingpressuredescription),
+    
+    fishingpressureunits       = ifelse(grepl("relative",fishingpressuredescription) & is.na(fishingpressureunits), "relative", fishingpressureunits ),
+    fishingpressuredescription = ifelse(grepl("relative",fishingpressuredescription) , "fproxy", fishingpressuredescription )
+  ) %>% 
+  
+  # corrections to fishing pressure units
+  mutate(
+    fishingpressureunits = gsub(" ",""  , fishingpressureunits),
+    fishingpressureunits = gsub("peryear","year-1"  , fishingpressureunits),
+    fishingpressureunits = gsub("%","percent"  , fishingpressureunits),
+    fishingpressureunits = gsub("^f$","year-1"  , fishingpressureunits),
+    fishingpressureunits = gsub("^catch/biomass$","relative"  , fishingpressureunits),
+
+    fishingpressureunits = ifelse(grepl("cm",fishingpressureunits), "year-1",fishingpressureunits) ,
+    fishingpressureunits = ifelse(grepl("null",fishingpressureunits), NA,fishingpressureunits) ,
+    fishingpressureunits = ifelse(grepl("ratio",fishingpressureunits), "relative",fishingpressureunits) 
+  ) %>% 
+  
+  # Add assessment type2 category (assess, bench, old, alt, explore)
+  # CHECK: Should I remove the labels from the fishstock variable  ??
+  mutate(
+    assessmenttype2 = ifelse(grepl("-bench$" , fishstock), "bench", "assess"),
+    assessmenttype2 = ifelse(grepl("-old$"   , fishstock), "old"  , assessmenttype2),
+    assessmenttype2 = ifelse(grepl("-alt$"   , fishstock), "alt"  , assessmenttype2)
+  ) %>% 
+  
+  # correction due to missing units
+  mutate(
+    stocksizeunits       = ifelse(stocksizedescription=="b/bmsy" & is.na(stocksizeunits),"relative",stocksizeunits),  
+    fishingpressureunits = ifelse(fishingpressuredescription=="f/fmsy" & is.na(fishingpressureunits),"relative",fishingpressureunits)
+  ) %>% 
+  
+  # corrections to the assignments of specific stocks and years
+  mutate(
+    stocksizedescription       = ifelse(fishstock=="anb-8c9a" & assessmentyear==2013,"b/bmsy"  ,stocksizedescription),
+    stocksizeunits             = ifelse(fishstock=="anb-8c9a" & assessmentyear==2013,"relative",stocksizeunits),
+    fishingpressuredescription = ifelse(fishstock=="anb-8c9a" & assessmentyear==2013,"f/fmsy"  ,fishingpressuredescription),
+    fishingpressureunits       = ifelse(fishstock=="anb-8c9a" & assessmentyear==2013,"relative",fishingpressureunits)
+  ) %>% 
+  
+  # remove double series (e.g. mac-nea 2013 is twice in the sag download)
+  group_by(fishstock, assessmentyear, year) %>% 
+  filter(row_number() == 1) %>% 
+  
+  # convert to lowercase
+  mutate_at(vars(assessmenttype), funs(tolower)) %>% 
+  
+  # remove empty variables
+  select(-recruitmentlength)
+```
+
+First overview of what we have (very ugly !!)
+
+```{r firstoverview, echo=TRUE, message=FALSE, warning=FALSE}
+sagdb %>% 
+  group_by(fishstock, assessmentyear) %>% 
+  filter(row_number()==1) %>% 
+  filter(assessmentyear >= 2001) %>% 
+  mutate(species = paste0(commonname," (", faocode,")"), sep="") %>% 
+  group_by(species, assessmentyear) %>% 
+  summarise(nassess = n()) %>% 
+  
+  dcast(species ~ assessmentyear, sum, value.var="nassess", margins = TRUE) %>% 
+  no.emphasis.table() %>% 
+  select(-1) %>% 
+  pandoc.table(.,
+               style = "grid",
+               split.tables=400, 
+               justify = "right",
+               missing=".",
+               round=c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+```
+
+Better to use a plot
+
+```{r firstplot, echo=FALSE, message=FALSE, warning=FALSE, fig.width=12, fig.height=15}
+x <-
+  sagdb %>% 
+  filter(assessmentyear >= 1990) %>% 
+  filter(fisheriesguild != "", !is.na(fisheriesguild)) %>% 
+  filter(fisheriesguild %in% c("crustacean","elasmobranch","pelagic","demersal","benthic")) %>%
+  mutate(fishstockold = ifelse(is.na(fishstockold)|fishstockold=="", fishstocknew, fishstockold)) %>% 
+  group_by(fishstockold, fishstocknew, assessmentyear, source) %>% 
+  data.frame() %>% 
+  mutate(fishstockold = factor(fishstockold), 
+         fishstockold = factor(fishstockold, levels = rev(levels(fishstockold)))) %>% 
+  
+  # here is the bit to add the colour variable
+  mutate(source = factor(source))
+
+# define colour scale
+myColors        <- brewer.pal(length(levels(x$source)),"Set1")
+names(myColors) <- levels(x$source)
+
+p1 <-
+  filter(x, fisheriesguild %in% c("crustacean","elasmobranch")) %>% 
+  ggplot(aes(x=assessmentyear, y=fishstockold)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        text          = element_text(size=8),
+        legend.title  = element_blank()) +
+  geom_point(aes(colour = source)) +
+  scale_colour_manual(name = "source", values = myColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  labs(x = " ", y = NULL ) +
+  facet_wrap(~fisheriesguild, scales="free_y", shrink=TRUE, ncol=1)
+
+p2a <-
+  filter(x, fisheriesguild %in% c("pelagic")) %>% 
+  ggplot(aes(x=assessmentyear, y=fishstockold)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        text          = element_text(size=8),
+        legend.title  = element_blank()) +
+  geom_point(aes(colour = source)) +
+  scale_colour_manual(name = "source", values = myColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  labs(x = NULL, y = NULL ) +
+  facet_wrap(~fisheriesguild, scales="free_y", shrink=TRUE, ncol=1)
+
+p2b <-
+  filter(x, fisheriesguild %in% c("benthic")) %>% 
+  ggplot(aes(x=assessmentyear, y=fishstockold)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        text          = element_text(size=8),
+        legend.title  = element_blank()) +
+  geom_point(aes(colour = source)) +
+  scale_colour_manual(name = "source", values = myColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  labs(x = "assessmentyear", y = NULL ) +
+  facet_wrap(~fisheriesguild, scales="free_y", shrink=TRUE, ncol=1)
+
+p2 <- plot_grid(p2a + 
+                  theme(legend.position="none", 
+                        axis.title.y=element_blank(), 
+                        axis.text.x=element_blank(), 
+                        plot.margin = unit(c(10, 5, 1, 5), "mm")), 
+                p2b + 
+                  theme(legend.position="none", 
+                        axis.title.y=element_blank(), 
+                        plot.margin = unit(c(1, 5, 5, 5), "mm")),
+                ncol=1,align="v",
+                rel_heights = c(4.7, 2))
+
+p3 <-
+  filter(x, fisheriesguild %in% c("demersal")) %>% 
+  ggplot(aes(x=assessmentyear, y=fishstockold)) +
+  theme_publication() +
+  theme(panel.spacing    = unit(0.1, "lines"),
+        text             = element_text(size=8),
+        legend.position  = "right",
+        legend.direction = "vertical",
+        legend.title     = element_blank()) +
+  geom_point(aes(colour = source)) +
+  scale_colour_manual(name = "source", values = myColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  labs(y = "fishstock", x=" " ) +
+  facet_wrap(~fisheriesguild, scales="free_y", shrink=TRUE)
+
+plot_grid(p1 + theme(legend.position="none") + theme(axis.title.y=element_blank()), 
+          p2 ,
+          p3 ,
+          ncol=3,
+          align = 'v', rel_widths = c(1,1,1.2))
+
+```
+
+## To do
+
+* Move the data and r code to github
+
+
+
+```{r Filter trip data, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+
+```
+
+

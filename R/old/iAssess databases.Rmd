@@ -1,0 +1,902 @@
+---
+output: 
+  word_document:
+    reference_docx: "my_template.dotx"
+---
+
+```{r, include=FALSE}
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knit_hooks$set(crop = hook_pdfcrop)
+rm(list=ls())
+
+```
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+# -----------------------------------------------------------------------------------------------
+# iAssess databases.Rmd
+#
+# 27/11/2017 converted from iAssess analysis markdown
+# 02/02/2017 generated first version for discussion with ICES
+# 07/12/2017 now QCS data is also stored on dropbox; code adapted for that
+# 02/01/2018 Working on assessment method coding; renamed some of the variables in the input files
+# 04/01/2018 coding the cod assessments in iStock.xlsx
+# 05/01/2018 now combined QCS and Excel data into one Excel file, to allow for manual alterations
+# -----------------------------------------------------------------------------------------------
+
+# Libraries
+library(rmarkdown)
+
+library(tidyverse) # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(RColorBrewer) # colours
+library(lubridate)
+library(docxtractr) # read word documents
+library(icesSD)    # ICES Stock database
+library(icesSAG)   # ICES Stock Assessment Graphs
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+
+# set dropboxdir
+dropboxdir <- paste(get_dropbox(), "/ICES assessment database", sep="")
+```
+
+
+# Description of the databases leading up to the iAssess database
+
+## Documenting the past of stock assessment in ICES
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+## 1. Introduction
+
+The iAssess database system aims to bring together the past of stock assessments within the ICES advisory system. To that end, the iAssess database combines three main sources of data: (1) the historical Quality Control Sheets (QCS) that were used in the 1990s, (2) the annual data of the 'standard graphs' that were originally started by Martin Pastoors in the early 2000s and later maintained by the ICES secretariat (Barbara Schoute), and (3) the ICES Standard Assessment Graph webservices that have been started around 2014. 
+
+The development of the iAssess database is a joint effort by several fisheries scientists working in different parts of the ICES system, notably:
+
+* Martin Pastoors, fisheries scientist at the Pelagic Freezer-Association, Netherlands 
+* Einar Hjorleifsson and Siggi Þór Jónsson, MFRI, Iceland
+* David Miller, Colin Millar, Carlos Pinto, Mike Drew and Adriana Villamor @ ICES secretariat
+* Esther Schuch, PhD student at Wageningen University, Netherlands
+* Barbara Schoute @ Natuurmonumenten, Netherlands. 
+
+## 2. General outline
+
+### 2.1 Data storage and coding
+
+Data storage is currently on the following Dropbox folder: https://www.dropbox.com/home/ICES%20Assessment%20database. Here the basic Excel files are stored and the rdata files generated in the processing of data. 
+
+The coding is stored on the following github folder: https://github.com/martinpastoors/iAssess. Here all the r codes are kept and also the Quality Control Sheets (not really consistent to keep them on github!)
+
+In addition we use some utily codes from https://github.com/martinpastoors/mptools, e.g.: get_dropbox, ... 
+
+### 2.2 Naming conventions
+
+ICES is an organization that was established in 1902. From the beginning it has had a strong focus on fisheries science and stock assessment. With that history, comes a tendency to develop standard practices to do and to call certain things in certain ways. For the purpose of the iAssess stock assessment database, the key element for linking objects has been the shortname association with the different stocks. 
+
+Unfortunately, the year 2017, when the iAssess effort really took off, has also been the year in which this tradition of calling the stocks in the same way, was left aside. New names, supposedly more consistent names, were developed for the stocks. Think about the move from **hom-west** to **hom.27.2a4a5b6a7a-ce-k8**. This brought about an extra challenge for the iAssess project for now only were we to bring together the historical assessment, we also needed to make sure that new names for similar stocks would not jeopardize the historical comparisons. In the renaming of the old names to the new names, not only the names changed, but also the stockkeys. Therefore an approach was followed to apply the same stockkey to the new name and old name, if the stocks were clearly the same, but with a new name. When there was no old stockkey available (because the old stockkey was not used prior to the renaming), a manual stockkey would be chosen, starting from 100000 and beyond.    
+
+In addition, for each of the stocks in the database, it is now possibly to denote them by their old name (stockkeylabelold) or the new name (stockkeylabelnew). The **iStock.xlsx** contains a summary of all assessments with the appropriate stockkeys and stockkeylabels.  
+
+```{r, out.width = "100%"}
+include_graphics("../pictures/istock.png")
+```
+
+_Figure 1: iStock.xlsx (on dropbox). Example focussing on mackerel._
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Generate iStock, iRename and iStockkey
+
+# read iStock object from excel file
+t <- 
+  readxl::read_excel(path= paste(dropboxdir, "/data/iStock.xlsx", sep=""), 
+                     col_names = TRUE, col_types = "text", trim_ws   = TRUE) %>%
+  lowcase() %>% 
+  mutate_at(c("assessmentmodel","assessmenttype","advicetype",
+              "expertgroup","useofdiscardsinadvice","pabufferapplied", "assessmentstatus"),
+            funs(tolower)) %>% 
+  mutate_at(c("fmax","f01","fmed","f35spr","flim","fpa","fmsy","blim","bpa","msybtrigger"), 
+            funs(as.numeric)) %>% 
+  mutate_at(c("stockkey", "assessmentyear", "firstyearofdata", "ncpueseries","nsurveyseries"),
+            funs(as.integer)) %>% 
+  
+  mutate(assessmenttype   = ifelse(grepl("explo",assessmentmodel), "exploratory",assessmenttype),
+         assessmenttype   = ifelse(grepl("trends",assessmentmodel), "trends",assessmenttype) ) %>% 
+  
+  mutate(assessmentmodel  = ifelse(grepl("(xsa"   , assessmentmodel, fixed=TRUE), "xsa"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("sxsa"   , assessmentmodel, fixed=TRUE), "sxsa"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(flxsa" , assessmentmodel, fixed=TRUE), "xsa"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(ica"   , assessmentmodel, fixed=TRUE), "ica"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(flica" , assessmentmodel, fixed=TRUE), "ica"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(sam"   , assessmentmodel, fixed=TRUE), "sam"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(flsam" , assessmentmodel, fixed=TRUE), "sam"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(tsa"   , assessmentmodel, fixed=TRUE), "tsa"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(adapt" , assessmentmodel, fixed=TRUE), "adapt" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(ss3"   , assessmentmodel, fixed=TRUE), "ss3"   , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(stock synthesis 3", assessmentmodel, fixed=TRUE), 
+                                   "ss3", assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(gadget" , assessmentmodel, fixed=TRUE), "gadget", assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(asap"  , assessmentmodel, fixed=TRUE), "asap"  , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(amish"  , assessmentmodel, fixed=TRUE), "amish" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(aspic"  , assessmentmodel, fixed=TRUE), "aspic" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(mycc"   , assessmentmodel, fixed=TRUE), "mycc"  , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("multi-year catch curve", 
+                                         assessmentmodel, fixed=TRUE), "mycc"  , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(aspic"  , assessmentmodel, fixed=TRUE), "aspic" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("aarts"  , assessmentmodel, fixed=TRUE), 
+                                   "aarts_poos" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(cbbm"  , assessmentmodel, fixed=TRUE), "cbbm" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(scaa"  , assessmentmodel, fixed=TRUE), "scaa" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(sms"  , assessmentmodel, fixed=TRUE), "sms" , assessmentmodel),
+         assessmentmodel  = ifelse(grepl("(tasacs"  , assessmentmodel, fixed=TRUE), "tasacs" , assessmentmodel),
+         # NEED TO FINALIZE THIS LIST !!
+         
+         assessmentdate   = as.Date(as.numeric(assessmentdate), origin="1899-12-30"),
+         advicereleasedate= as.Date(as.numeric(advicereleasedate), origin="1899-12-30"),
+         modifieddate     = as.Date(as.numeric(modifieddate), origin="1899-12-30")
+         
+         # assessmenttype2 = ifelse(assessmenttype %in% c("exploratory","trends","trends only"), 
+         #                          "trends",assessmenttype)
+  ) %>% 
+  arrange(stockkey, assessmentyear, stockkeylabel) 
+
+# t %>% filter(fao =="cod") %>% distinct(assessmentmodel) %>% View()
+
+iStock <-
+  t %>% 
+  select(stockkey, stockkeylabel, 
+         assessmentyear, assessmenttype, assessmentmodel, assessmentdate, assessmentcomment,
+         stockarea, expertgroup, advicedraftinggroup, 
+         firstyearofdata, agerange, ncpueseries, nsurveyseries, 
+         datacategory, yearoflastassessment, assessmentfrequency, yearofnextassessment, 
+         advicereleasedate, advicetype, useofdiscardsinadvice, pabufferapplied, 
+         assessmentstatus, assessmentscale, sectionnumber, assessmentkey, modifieddate,
+         fmax, f01, fmed, f35spr, flim, fpa, fmsy, blim, bpa, msybtrigger, checkeddate, checkedby) 
+
+# iStockkey
+iStockkey <-
+  t %>% 
+  group_by(stockkey) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  select(stockkey, stockkeylabelnew, stockkeylabelold)
+
+
+# iRename
+iRename <-
+  t %>% 
+  # group_by(stockkey, stockkeylabel, stockkeydescription, speciesfaocode=fao) %>% 
+  group_by(stockkey, stockkeylabel) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  select(stockkeylabel, stockkey, stockkeydescription, speciesfaocode=fao) 
+
+# iSpecies
+iSpecies <-
+  readxl::read_excel(path= paste(dropboxdir, "/data/species_list.xlsx", sep=""), 
+                     col_names = TRUE, col_types = "text", trim_ws   = TRUE) %>%
+  mutate_at(c("speciescommonname","trophicguild","fisheriesguild","sizeguild"), 
+            funs(tolower)) %>%
+  group_by(speciesfaocode, speciesscientificname, speciescommonname) %>%
+  arrange(speciesfaocode) 
+
+save(iStock     , file=paste(dropboxdir, "/rdata/iStock.RData", sep=""))
+save(iStockkey  , file=paste(dropboxdir, "/rdata/iStockkey.RData", sep=""))
+save(iRename    , file=paste(dropboxdir, "/rdata/iRename.RData", sep=""))
+save(iSpecies   , file=paste(dropboxdir, "/rdata/iSpecies.RData",sep=""))
+
+# iStock %>% filter(stockkeylabel == "cod-skag") %>% View()
+# iStockkey %>% filter(stockkeylabelold == "cod-skag") %>% View()
+# iStockkey %>% filter(stockkey == 100027) %>% View()
+
+```
+
+iStock object: 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+print(filter(iStock,    stockkey == 169137, assessmentyear >= 2014), width=95)
+```
+
+iStockkey object: 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+print(filter(iStockkey,    stockkey == 169137))
+```
+
+iRename object:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+print(filter(iRename,    stockkey == 169137))
+```
+
+iSpecies object:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+print(filter(iSpecies,    speciesfaocode == "mac"))
+```
+
+
+##### page break
+
+### 2.3 Quality Control Sheets (QCS)
+
+```{r, eval=TRUE, message=FALSE, warning=FALSE, include=FALSE}
+
+# make list of filenames
+file.list <- c(list.files(path       = paste(dropboxdir, "/data/qcs-docs-docx/", sep=""), 
+                          pattern    = "docx",
+                          recursive  = TRUE, 
+                          full.names = TRUE,   
+                          ignore.case= TRUE) )
+
+# read files from filename list
+for (i in 1:length(file.list)) {
+  
+  # extract stock name
+  stockkeylabel <- gsub(".qcs.docx","", file.list[i], fixed=TRUE)
+  stockkeylabel <- gsub("((?:[^/]*/)*)(.*)","\\2", stockkeylabel)
+  
+  # print(paste0(i,stockkeylabel,file.list[i],sep=" - "))
+  
+  # set docx object
+  docx <- read_docx(path=file.list[i])
+
+  # read tables
+  tmp <- docx_extract_all_tbls(docx, guess_header = FALSE, trim = TRUE)  
+  
+  # convert tables to data frames
+  for (j in 1:length(tmp)) {
+    
+    t       <- tmp[j] %>%  as.data.frame()
+    variable <- tolower(t[1,1])
+    yeartype <- tolower(t[2,2])
+    nc      <- ncol(t)
+    nr      <- nrow(t)
+    head    <- t[3,2:nc]
+    rows    <- t[4:nr,1]  %>% data.frame()
+    names(rows) <- "assessmentyear"
+    t <- 
+      t[4:nr,2:nc] %>% 
+      setNames(head) %>% 
+      cbind(rows) %>% 
+      gather(key=year, value=value, 1:(nc-1)) %>% 
+      mutate(stockkeylabel          = tolower(stockkeylabel), 
+             variable       = variable,
+             yeartype       = yeartype, 
+             value          = as.numeric(gsub("\\s+","",value)),
+             assessmentyear = substr(as.character(assessmentyear), 1,4),
+             assessmentyear = as.integer(assessmentyear)) %>% 
+      filter(!is.na(value), value != "")
+    
+    if (j == 1) { data <- t
+    } else      { data <- rbind(data,t) }
+    
+  } # end of j for loop
+  
+  if (i == 1) { qcsdata <- data
+  } else      { qcsdata <- rbind(qcsdata,data) }
+} #end of i for loop  
+
+# check and convert
+t <-
+  qcsdata %>% 
+  mutate(
+    year    = as.integer(year),
+    stockkeylabel   = gsub(".qcs.docx","",stockkeylabel), 
+    stockkeylabel   = gsub("anb-89","anb-8c9a", stockkeylabel),
+    stockkeylabel   = gsub("anp-89","anp-8c9a", stockkeylabel),
+    stockkeylabel   = gsub("cod-coast","cod-coas", stockkeylabel),
+    stockkeylabel   = gsub("had-icel","had-iceg", stockkeylabel),
+    stockkeylabel   = gsub("had-irisde3","had-iris", stockkeylabel),
+    stockkeylabel   = gsub("her-2532excgor","her-2532-gor", stockkeylabel),
+    stockkeylabel   = gsub("mac-wes","mac-nea", stockkeylabel),
+    
+    yeartype= gsub("\\s","",yeartype), 
+    
+    variable = gsub("  "," ", variable), 
+    var     = ifelse(grepl("average f"  , variable), "f"  , NA),
+    var     = ifelse(grepl("spawning"   , variable), "ssb", var),
+    var     = ifelse(grepl("recruitment", variable), "r"  , var),
+    var     = ifelse(grepl("fishable"   , variable), "fb" , var),
+    
+    unit    = ifelse(var=="f"                                  , "year-1"                            , NA),
+    
+    # extract the bits between brackets
+    unit    = ifelse(var=="ssb" & grepl("\\(.+\\)$"  , variable), gsub(".+\\((.+)\\)$","\\1", variable), unit),
+    unit    = ifelse(var=="fb"  & grepl("\\(.+\\)$"  , variable), gsub(".+\\((.+)\\)$","\\1", variable), unit),
+    unit    = ifelse(             grepl("unit: (.+)$", variable), gsub(".+unit: (.+)$","\\1", variable), unit),
+    unit    = ifelse(var=="r" & stockkeylabel=="cod-2532"              , "thousands"                         , unit),  
+    unit    = ifelse(var=="r" & stockkeylabel=="cod-iceg"              , "millions"                          , unit),  
+    unit    = ifelse(var=="r" & stockkeylabel=="ple-celt"              , "thousands"                         , unit),  
+    unit    = ifelse(var=="r" & stockkeylabel=="hke-soth"              , "check"                             , unit),
+    
+    unit    = gsub("[^[:alnum:]]", "", unit), 
+    unit    = gsub("^000s$|^000$","thousands", unit),
+    unit    = gsub("^000 000s$|000000s","millions" , unit),
+    unit    = gsub("^000t$|^000stonnes$|^000tonnes$","thousand tonnes" , unit),
+    unit    = gsub("000million$","billions" , unit),
+    unit    = gsub("^t$", "tonnes",unit),
+    unit    = ifelse(unit == "year1","year-1",unit),
+    
+    age     = ifelse(var=="f" & grepl("\\(.+\\)$", variable), gsub(".+\\((.+)\\)$","\\1", variable), NA),
+    age     = gsub(" +", "", age), 
+    age     = gsub(",,u", "", age), 
+    age     = gsub(",u", "", age), 
+    age     = gsub(",w", "", age), 
+    age     = ifelse(var=="f" & stockkeylabel=="anb-78ab" & assessmentyear <= 2000, "4-8" , age),
+    age     = ifelse(var=="f" & stockkeylabel=="anb-78ab" & assessmentyear  > 2000, "6-10", age),
+    age     = ifelse(var=="f" & stockkeylabel=="anp-78ab" & assessmentyear <= 2000, "3-7", age),
+    age     = ifelse(var=="f" & stockkeylabel=="anp-78ab" & assessmentyear  > 2000, "3-8", age),
+    age     = ifelse(var=="f" & stockkeylabel=="cod-347d" & assessmentyear <= 2002, "2-8", age),
+    age     = ifelse(var=="f" & stockkeylabel=="cod-347d" & assessmentyear  > 2002, "2-4", age),
+    age     = ifelse(var=="f" & stockkeylabel=="her-irls"                          ,"2-7" , age ),
+    
+    # extract recruitment age information between brackets
+    age     = ifelse(var=="r" & grepl(".+\\(age (.)\\).+", variable), gsub(".+\\(age (.)\\).+","\\1", variable), age),
+    age     = ifelse(var=="r" & grepl(".+\\(age (.) \\).+", variable), gsub(".+\\(age (.) \\).+","\\1", variable), age),
+    age     = ifelse(var=="r" & stockkeylabel=="anb-78ab" & assessmentyear <= 2000, "1", age),
+    age     = ifelse(var=="r" & stockkeylabel=="anb-78ab" & assessmentyear  > 2000, "2", age),
+    age     = ifelse(var=="r" & stockkeylabel=="anp-78ab" & assessmentyear <= 2000, "0", age),
+    age     = ifelse(var=="r" & stockkeylabel=="anp-78ab" & assessmentyear  > 2000, "1", age),
+    age     = ifelse(var=="r" & stockkeylabel=="cod-2532", "2"    , age),  # looked up in ACFM report
+    age     = ifelse(var=="r" & stockkeylabel=="her-irls", "1"    , age),  # looked up in ACFM report
+    age     = ifelse(var=="r" & stockkeylabel=="mgw-78"  , "1"    , age),  # looked up in ACFM report
+    age     = ifelse(var=="r" & stockkeylabel=="ple-celt", "1"    , age),  # looked up in ACFM report
+    age     = ifelse(var=="r" & stockkeylabel=="whg-47d" , "check", age)
+  )
+
+setf   <- t %>% filter(var=="f")   %>% 
+  select(stockkeylabel, assessmentyear, year, fishingpressuredescription=var, f=value, fishingpressureunits=unit, fage=age)
+
+setr   <- t %>% filter(var=="r")   %>% 
+  select(stockkeylabel, assessmentyear, year, recruitmentdescription=var, r=value, recruitmentunits=unit, 
+         recruitmentage=age, yeartype) %>% 
+  # correct for yearclass reporting of recruitment
+  mutate(year    = ifelse(yeartype=="yearclass", year + as.integer(recruitmentage), year)) %>% 
+  arrange(stockkeylabel, assessmentyear, year)
+
+setssb <- t %>% filter(var=="ssb") %>% 
+  select(stockkeylabel, assessmentyear, year, stocksizedescription=var, ssb=value, stocksizeunits=unit) 
+# setfb  <- t %>% filter(var=="fb")  %>% 
+#   select(stockkeylabel, assessmentyear, year, stocksizedescription=var, fb=value, stocksizeunits=unit, stocksizeage=age)
+
+qcsdata <-
+  
+  select(setr, 
+         stockkeylabel, assessmentyear, year, recruitment=r, 
+         recruitmentunits, recruitmentage, recruitmentdescription) %>% 
+  
+  full_join(select(setssb, 
+                   stockkeylabel, assessmentyear, year, ssb, stocksizeunits, stocksizedescription), 
+            by=c("stockkeylabel","assessmentyear","year")) %>% 
+  
+  full_join(select(setf, 
+                   stockkeylabel, assessmentyear, year, 
+                   f, fishingpressureunits, fage, fishingpressuredescription) , 
+            by=c("stockkeylabel","assessmentyear","year")) %>% 
+  
+  arrange(stockkeylabel, assessmentyear, year) %>% 
+  
+  mutate(ssb            = ifelse(stocksizeunits == "thousand tonnes", ssb * 1000, ssb),
+         stocksizeunits = ifelse(stocksizeunits == "thousand tonnes", "tonnes", stocksizeunits)) %>% 
+  
+  left_join(iRename, by=c("stockkeylabel")) %>% 
+  
+  mutate(assessmenttype  = "assess",
+         source          = "qcs")  %>% 
+  
+  # add the assessment date
+  left_join(select(iStock, 
+                   stockkeylabel, assessmentyear, assessmentdate), 
+            by = c("stockkeylabel","assessmentyear"))
+  
+# qcsdata %>%   filter(stockkeylabel == "cod-kat") %>% View()
+# iRename %>%   filter(stockkeylabel == "cod-kat") %>% View()
+# glimpse(iRename)
+# glimpse(qcsdata)
+
+# save dataset
+save(qcsdata, file=paste(dropboxdir, "/rdata/qcsdata.RData",sep=""))
+
+```
+
+The first type of datasets are the old Quality Control Sheets as they have been in use up to around 2004. The Quality Control Sheets are contained in Word documents with three separate tables: one for fishing mortality, one for recruitment and one for SSB. Each of the tables is a matrix with year on the columns and assessmentyear on the rows. These type of tables, typically have a number of footnotes associated with them. For the purpose of reading in the data, all footnotes identifiers (i.e. the numbers in the tables) have been removed automatically in order to avoid having extra numbers being added to the values in the table. If not, a cell containing for example the value 100 and the footnote "5" would have been read as 1005. The original tables with the footnotes have been kept as a backup, so that more detailed transcription of the data is still possible.   
+
+```{r, out.width = "100%"}
+include_graphics("../pictures/qcs.png")
+```
+_Figure 2: Example of Quality Control Sheet of Anglerfish L. budegassa (fishing mortality) with year in the columns and assessmentyear on the rows. Note the descriptions of the changes in ages over which average F is calculated (taken up in the code) and the comments on the bottom of the table (not yet taken up in the code)._
+
+The variables used in the qcsdata object are shown in the text table below. There are `r length(unique(qcsdata$stockkeylabel))` stocks contained in the data object. The first assessment year is `r min(unique(qcsdata$assessmentyear))` and the last assessmentyear is `r max(unique(qcsdata$assessmentyear))`. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+glimpse(qcsdata, width=95)
+```
+
+The stocks involved are: 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+print((unique(qcsdata$stockkeylabel)), quote=FALSE, row.names=FALSE, width=95)
+```
+
+##### page break
+
+### 2.4 Excel database of 'Standard Graphs'
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+exceldata <-
+  readxl::read_excel(paste(dropboxdir, "/data/ICES Assessment Summary database.xlsx",sep=""),
+             sheet = "DATA", 
+             col_names = TRUE, 
+             col_types = "text", 
+             skip = 0) %>%
+  lowcase %>%
+  rename(stockkeylabel = fishstock) %>% 
+  mutate(stockkeylabel = tolower(stockkeylabel),
+         assessmentdate = as.Date(as.numeric(assessmentdate), origin="1899-12-30")) %>%
+  mutate_at(vars("year","assessmentyear"), funs(as.integer)) %>% 
+  mutate_at(vars("lowrecruitment", "recruitment","highrecruitment",
+                 "lowssb","ssb","highssb",
+                 "lowf", "f","highf",
+                 "landings","catches","discards","ibc"), 
+            funs(as.numeric)) %>%
+  mutate_at(vars("stocksizedescription","stocksizeunits",
+                 "fishingpressuredescription", "fishingpressureunits"), 
+            funs(tolower)) %>% 
+  # mutate(assessmenttype2 = ifelse(assessmentyear >= 2011 & assessmenttype2 == "assess", 
+  #                                "update",assessmenttype2)) %>% 
+  ungroup() %>% 
+  
+  # select only the relevant fields (could be more though !!)
+  select(stockkeylabel, assessmentyear, assessmenttype, year, assessmentdate,
+         lowrecruitment, recruitment, highrecruitment, 
+         lowssb, ssb, highssb, 
+         lowf, f, highf, 
+         landings, catches, discards, ibc, 
+         stocksizeunits, stocksizedescription, fishingpressuredescription, fishingpressureunits,
+         fage) %>% 
+  
+  # dealing with old and new stocknames
+  left_join(iRename, by = c("stockkeylabel")) %>% 
+  filter(year <= assessmentyear) %>% 
+  
+  mutate(source = "excel",
+         units = "") %>% 
+  arrange(stockkeylabel, assessmentyear, year)
+
+# save dataset
+save(exceldata, file=paste(dropboxdir, "/rdata/exceldata.RData",sep=""))
+```
+
+The origin of the Excel database started with a private collection of stock assessment results by Martin Pastoors, driven by an interest in the historical performance of stock assessments (e.g. Van Beek, F. A. and M. A. Pastoors (1999), Reeves, S. A. and M. A. Pastoors (2007)). The assessment results were taken from the annual assessments that were entered into the standard graph database, and initially the only additional effort was to add the assessmentyear to the variables already in the database. This private collection was later taken up by the ICES secretariat (Barbara Schoute) where it was used to populate the historial retrospective plots that were included in the advice documents from 2006 onwards. 
+
+Because the standard graph database in ICES was expanding (e.g. including more variables), the excel database was also expanded so that the data could be easily transferred from the standard graphs to the excel database. 
+
+The latest development has been that not only the assessments were included in the excel database but also the withdrawn assessments (e.g. because of errors detected) and the benchmark assessments (only to a very limited degree so far). To make it possible to distinguish between a final assessment and other assessments, the variable assessmenttype2 has been introduced with the following possible values: assess, update, benchmark, withdrawn, trends only. The number of benchmarks in the database is still very limited. 
+
+The variables used in the exceldata object are shown in the text table below. There are `r length(unique(exceldata$stockkeylabel))` stocks contained in the data object. The first assessment year is `r min(unique(exceldata$assessmentyear))` and the last assessmentyear is `r max(unique(exceldata$assessmentyear))`.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+glimpse(exceldata, width=95)
+```
+
+The stocks in the excel database are:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+print((unique(exceldata$stockkeylabel)), quote=FALSE, row.names=FALSE, width=95)
+```
+
+##### page break
+
+### 2.5 ICES Stock Assessment Graphs (SAG) webservices
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+# get SAG from ICES webservices
+
+# getSAG        <- icesSAG::getSAG(stock=NULL, year=0, data="summary", combine=TRUE)
+# save(getSAG       , file=paste(dropboxdir, "/rdata/getSAG.RData",sep=""))
+load(file=paste(dropboxdir, "/rdata/getSAG.RData",sep=""))
+
+# process standard graph data SAG and prepare for combining
+
+sagdata <- 
+  getSAG %>% 
+  lowcase() %>% 
+  dplyr:: select(stockkeylabel=fishstock, assessmentyear, year,
+                 recruitment, highrecruitment, lowrecruitment,
+                 ssb, highssb, lowssb,
+                 f, highf, lowf, 
+                 catches, landings, discards,
+                 fage, 
+                 units, 
+                 stocksizedescription, stocksizeunits,
+                 fishingpressuredescription, fishingpressureunits) %>% 
+  
+  mutate(assessmenttype  = "assess",
+         assessmentdate = as.Date(NA)) %>% 
+    
+  # dealing with old and new stocknames
+  left_join(iRename, by = c("stockkeylabel")) %>% 
+  
+  # mutate tolower
+  mutate_at(vars("stocksizedescription","stocksizeunits","fishingpressuredescription","fishingpressureunits"), 
+            funs(tolower)) %>% 
+  
+  mutate(source = "sag",
+         ibc    = NA )%>% 
+  ungroup() %>% 
+  data.frame() %>% 
+  
+  # add the assessment date
+  left_join(select(iStock, 
+                   stockkeylabel, assessmentyear, assessmentdate), 
+            by = c("stockkeylabel","assessmentyear"))
+
+# sagdata %>%   filter(stockkeylabel == "cod-kat") %>% View()
+
+# save dataset
+save(sagdata, file=paste(dropboxdir, "/rdata/sagdata.RData",sep=""))
+
+```
+
+The third element of the iAssess database are the assessments that are being collected now as part of the ICES Stock Assessment Graph Database and available through the ICES webservices. Although there are multiple elements to these databases, at this stage only the function getSAG has been used to obtain the assessment results. The function getSD (get Stock Database) has been used but only to convert it into the iStock.xlsx so that certain variables could be manually manipulated (e.g. the stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew and stockarea). 
+
+The variables used in the SAGdata object are shown in the text table below. There are `r length(unique(sagdata$stockkey))` stocks contained in the data object. The first assessment year is `r min(unique(sagdata$assessmentyear))` and the last assessmentyear is `r max(unique(sagdata$assessmentyear))`.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+glimpse(sagdata, width=95)
+```
+
+The stocks in the SAG database are:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+t <-
+  sagdata %>% 
+  distinct(stockkey) %>% 
+  left_join(iStockkey, by="stockkey") %>% 
+  arrange(stockkeylabelnew) %>% 
+  mutate(stock = paste(stockkeylabelold, stockkeylabelnew,sep="/")) %>% 
+  select(stock) %>% 
+  filter(stock != "NA/NA") %>% 
+  mutate(stock=gsub("/NA","", stock, fixed=TRUE))
+
+print(sort(as.character(t(t))), quote=FALSE, col.names=FALSE, row.names=FALSE, width=95)
+```
+
+##### page break
+
+## 3. Combining data
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+# -----------------------------------------------------------------------------------------
+# iAssess_part1: standard graph data SAG and prepare for combining
+# -----------------------------------------------------------------------------------------
+iAssess_part1 <- 
+  sagdata %>% 
+
+  # temporary: removing her.27.1-24a514a 2017 because of error in the export of multiple versions. 
+  filter(!(stockkeylabel == "her.27.1-24a514a" & assessmentyear == 2017))  
+
+# Extract list of fishstock and assessment years from SAG database
+iAssess_part1_unique <-
+  iAssess_part1 %>% 
+  group_by(stockkey, assessmentyear, stockkeylabel, assessmenttype) %>% 
+  filter(row_number()==1) %>% 
+  select(stockkey, assessmentyear, stockkeylabel, assessmenttype) %>% 
+  ungroup()
+
+# -----------------------------------------------------------------------------------------
+# iAssess_part2: Old excel assessment database and prepare for combining
+# -----------------------------------------------------------------------------------------
+iAssess_part2 <-
+  exceldata
+
+# Extract list of fishstock and assessment years from old database
+iAssess_part2_unique <-
+  iAssess_part2 %>% 
+  group_by(stockkey, assessmentyear, stockkeylabel, assessmenttype) %>% 
+  filter(row_number()==1) %>% 
+  select(stockkey, assessmentyear, stockkeylabel, assessmenttype) %>% 
+  ungroup()
+
+# Select from iAssess_part2 the assessments to be added to iAssess_part1
+iAssess_part2_toadd <-
+  setdiff(select(iAssess_part2_unique, stockkey, assessmentyear, assessmenttype),
+          select(iAssess_part1_unique, stockkey, assessmentyear, assessmenttype)) %>% 
+  left_join(iAssess_part2, by=c("stockkey","assessmentyear", "assessmenttype")) %>% 
+  data.frame()
+
+# -----------------------------------------------------------------------------------------
+# iAssess_part3: dataset from old Quality Control Sheets
+# -----------------------------------------------------------------------------------------
+
+iAssess_part3 <-
+  qcsdata
+
+# Extract list of fishstock and assessment years from old QCS database
+iAssess_part3_unique <-
+  iAssess_part3 %>% 
+  group_by(stockkey, assessmentyear, stockkeylabel, assessmenttype) %>% 
+  filter(row_number()==1) %>% 
+  select(stockkey, assessmentyear, stockkeylabel, assessmenttype) %>% 
+  ungroup()
+
+# Select from iAssess_part3 the assessments to be added to iAssess_part1
+iAssess_part3_toadd <-
+  setdiff(select(iAssess_part3_unique, stockkey, assessmentyear, assessmenttype),
+          select(iAssess_part1_unique, stockkey, assessmentyear, assessmenttype)) %>% 
+  left_join(iAssess_part3, by=c("stockkey","assessmentyear", "assessmenttype")) %>% 
+  data.frame()
+
+# -----------------------------------------------------------------------------------------
+# Generate iAssess and do cleaning up
+# -----------------------------------------------------------------------------------------
+
+iAssess <- 
+  bind_rows(iAssess_part1, iAssess_part2_toadd) %>%  
+  bind_rows(., iAssess_part3_toadd) %>% 
+
+  # corrections to stock size descriptions
+  mutate(
+    stocksizedescription = gsub("stock size: "                 ,""                   , stocksizedescription),
+    stocksizedescription = gsub("indices"                      ,"index"              , stocksizedescription),
+    stocksizedescription = gsub("indicator"                    ,"index"              , stocksizedescription),
+    stocksizedescription = gsub("^biomass$"                    ,"total biomass index", stocksizedescription),
+    stocksizedescription = gsub("^biomass index$"              ,"total biomass index", stocksizedescription),
+    stocksizedescription = gsub("^evhoe biomass index$"        ,"total biomass index", stocksizedescription),
+    stocksizedescription = gsub("^stock size index: abundance$","abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^abundance$"                  ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^density$"                    ,"density index"      , stocksizedescription),
+    stocksizedescription = gsub("^tsb$"                        ,"total biomass"      , stocksizedescription),
+    stocksizedescription = gsub("^total abundance index$"      ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^index$"                      ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^stock abundance$"            ,"abundance index"    , stocksizedescription),
+    stocksizedescription = gsub("^density index$"              ,"abundance index"    , stocksizedescription),
+    
+    stocksizedescription = gsub("stock size index: biomass \\(ages 1-8\\)"   ,"total biomass index"      , stocksizedescription),
+    stocksizedescription = gsub("stock size index: german survey"            ,"total biomass index"      , stocksizedescription),
+    stocksizedescription = gsub("stock size index: smoothed greenland index" ,"total biomass index"      , stocksizedescription),
+    
+    stocksizedescription = ifelse(grepl("tv",stocksizedescription), "abundance index", stocksizedescription),
+    stocksizedescription = ifelse(grepl("ssb & b",stocksizedescription) , "ssb", stocksizedescription),
+    stocksizedescription = ifelse(grepl("total biomass/bmsy",stocksizedescription) , "b/bmsy", stocksizedescription),
+    stocksizedescription = ifelse(stocksizedescription == "stock size" & stocksizeunits == "tonnes", "ssb", stocksizedescription),
+    stocksizedescription = ifelse(stocksizedescription == "stock size" & grepl("kg/",stocksizeunits), "total biomass index", stocksizedescription),
+    stocksizedescription = ifelse(grepl("relative", stocksizeunits, fixed=TRUE) & is.na(stocksizedescription), "total biomass index", stocksizedescription)
+  ) %>% 
+  
+  # corrections to stock units
+  mutate(
+    stocksizeunits = gsub("stock size: "                 ,""                   , stocksizeunits),
+    stocksizeunits = gsub(" ", "", stocksizeunits),
+    stocksizeunits = gsub("density(burrows/m2)", "burrows/m2", stocksizeunits, fixed=TRUE),
+    stocksizeunits = gsub("cpue(kg/1000hooks)", "kg/1000hooks", stocksizeunits, fixed=TRUE),
+    stocksizeunits = gsub("^abundance$", "millions", stocksizeunits),
+    stocksizeunits = gsub("na(ratio)", "relative", stocksizeunits, fixed=TRUE),
+    stocksizeunits = ifelse(grepl("kg/h", stocksizeunits, fixed=TRUE), "kg/hour", stocksizeunits),
+    stocksizeunits = ifelse(grepl("n/h", stocksizeunits, fixed=TRUE), "n/hour", stocksizeunits)
+  ) %>% 
+
+  # corrections to fishing pressure descriptions
+  mutate(
+    fishingpressuredescription = gsub("fishing pressure: ",""  , fishingpressuredescription),
+    fishingpressuredescription = gsub(" ",""  , fishingpressuredescription),
+    fishingpressuredescription = gsub("f&hr","f"  , fishingpressuredescription, fixed=TRUE),
+    fishingpressuredescription = gsub("fishingpressure","f"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("finwinterrings","f"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("weightedf","f"  , fishingpressuredescription), 
+    
+    fishingpressuredescription = gsub("harvestrate","hr"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("relativehr","hr/index"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("hrindex","hr/index"  , fishingpressuredescription), 
+    fishingpressuredescription = gsub("relativeexploitationrate","hr/index"  , fishingpressuredescription), 
+    
+    fishingpressuredescription = ifelse(grepl("ages",fishingpressuredescription), "f", fishingpressuredescription),
+    fishingpressuredescription = ifelse(grepl("null",fishingpressuredescription), NA, fishingpressuredescription),
+    
+    fishingpressureunits       = ifelse(grepl("relative",fishingpressuredescription) & is.na(fishingpressureunits), "relative", fishingpressureunits ),
+    fishingpressuredescription = ifelse(grepl("relative",fishingpressuredescription) , "fproxy", fishingpressuredescription )
+  ) %>% 
+  
+
+  # corrections to fishing pressure units
+  mutate(
+    fishingpressureunits = gsub(" ",""  , fishingpressureunits),
+    fishingpressureunits = gsub("peryear","year-1"  , fishingpressureunits),
+    fishingpressureunits = gsub("%","percent"  , fishingpressureunits),
+    fishingpressureunits = gsub("^f$","year-1"  , fishingpressureunits),
+    fishingpressureunits = gsub("^catch/biomass$","relative"  , fishingpressureunits),
+
+    fishingpressureunits = ifelse(grepl("cm",fishingpressureunits), "year-1",fishingpressureunits) ,
+    fishingpressureunits = ifelse(grepl("null",fishingpressureunits), NA,fishingpressureunits) ,
+    fishingpressureunits = ifelse(grepl("ratio",fishingpressureunits), "relative",fishingpressureunits) 
+  ) %>% 
+  
+  # correction due to missing units
+  mutate(
+    stocksizeunits       = ifelse(stocksizedescription=="b/bmsy" & is.na(stocksizeunits),"relative",stocksizeunits),  
+    fishingpressureunits = ifelse(fishingpressuredescription=="f/fmsy" & is.na(fishingpressureunits),"relative",fishingpressureunits)
+  ) %>% 
+  
+  # corrections to the assignments of specific stocks and years
+  mutate(
+    stocksizedescription       = ifelse(stockkeylabel=="anb-8c9a" & assessmentyear==2013,"b/bmsy"  ,stocksizedescription),
+    stocksizeunits             = ifelse(stockkeylabel=="anb-8c9a" & assessmentyear==2013,"relative",stocksizeunits),
+    fishingpressuredescription = ifelse(stockkeylabel=="anb-8c9a" & assessmentyear==2013,"f/fmsy"  ,fishingpressuredescription),
+    fishingpressureunits       = ifelse(stockkeylabel=="anb-8c9a" & assessmentyear==2013,"relative",fishingpressureunits)
+  ) %>% 
+  
+  # remove double series (e.g. mac-nea 2013 is twice in the sag download)
+  group_by(stockkeylabel, assessmentyear, year, assessmenttype) %>% 
+  filter(row_number() == 1) %>% 
+  
+  # add old and new names
+  left_join(iStockkey, by="stockkey") %>% 
+  
+  # add species info
+  left_join(iSpecies, by="speciesfaocode") %>% 
+  
+  # add stock info
+  # left_join(iStock, by=c("stockkey","stockkeylabel","assessmentyear","assessmenttype","assessmentdate")) %>% 
+  
+  # convert to lowercase
+  ungroup() %>% 
+  as.data.frame()
+
+save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+```
+
+We merge the three data sources by comparing all the combinations of **stockkey**, **assessmentyear**, **stockkeylabel** and **assessmenttype** in the different datasources. First all unique combinations that are in the _exceldata_ object but not in the _sagdata_ object, are added to the _sagdata_ object. Then all unique combinations that are in the _qcsdata_ object but not in the _exceldata_ object, are added to the _sagdata_ object. This combined object is called _iAssess_. Several manipulations are carried out to clean up the merged data, e.g. make consistent use of terminology for stocksizedescription, fishingpressuredescriptions etc. 
+
+The variables used in the _iAssess_ object are shown in the text table below. There are `r length(unique(iAssess$stockkey))` stocks contained in the data object. The first assessment year is `r min(unique(iAssess$assessmentyear))` and the last assessmentyear is `r max(unique(iAssess$assessmentyear))`.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+glimpse(iAssess, width=95)
+```
+
+##### page break
+
+## 4. Quality control
+
+##### page break
+
+## 5. Data overviews
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.asp=1.25}
+
+# data handling and plot by data source
+x <-
+  iAssess %>% 
+  filter(assessmentyear >= 1987) %>% 
+  filter(!is.na(stockkey)) %>% 
+  group_by(stockkeylabelold, stockkeylabelnew, assessmentyear, assessmenttype, source) %>% 
+  filter(row_number() ==1) %>% 
+  select(-year) %>% 
+  ungroup() %>% 
+  arrange(stockkeylabelold) %>% 
+  mutate(id = group_indices(., stockkeylabelold)) %>% 
+  data.frame() %>% 
+  mutate(stockkeylabelold = ifelse(is.na(stockkeylabelold), stockkeylabel, stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = factor(stockkeylabelold), 
+         stockkeylabelold = factor(stockkeylabelold, levels = rev(levels(stockkeylabelold))),
+         source           = factor(source, levels=c("qcs","excel","sag")),
+         assessmenttype  = factor(assessmenttype),
+         assessmentdate    = ifelse(is.na(assessmentdate), 
+                                   make_date(year = assessmentyear, month = 6L, day = 30L),
+                                   assessmentdate),
+         assessmentdate    = as.Date(assessmentdate, origin="1970-01-01"),
+         col              = ifelse(id <=  90            , 1, NA),
+         col              = ifelse(id  >  90 & id <= 180, 2, col),
+         col              = ifelse(id  > 180            , 3, col)) 
+
+# define colour scale
+myColors        <- brewer.pal(length(levels(x$source)),"Set1")
+names(myColors) <- levels(x$source)
+
+# define headers for columns
+y <-
+  x %>% 
+  group_by(col) %>% 
+  filter(row_number()==1| row_number() == n()) %>% 
+  ungroup() %>% 
+  mutate(id = group_indices(., col)) %>% 
+  select(col, id, stockkeylabelold) %>% 
+  group_by(col) %>% 
+  summarise(code = paste(stockkeylabelold, collapse=" : "))
+
+
+# plot by stock and data source
+x %>% 
+  left_join(y, by="col") %>% 
+  ggplot(aes(x=assessmentdate, y=stockkeylabelold)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        text          = element_text(size=8),
+        legend.title  = element_blank(),
+        axis.text.x   = element_text(angle = 90, vjust = 1)) +
+  geom_point(aes(colour = source)) +
+  scale_colour_manual(name = "source", values = myColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%y") +
+  labs(x = "assessmentyear", y = NULL ) +
+  facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
+
+  
+```
+
+_Figure 3. Overview of data sources for the different stocks (stockkeylabelold)._
+
+##### page break
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.asp=1.25}
+
+# plot by assessmenttype
+
+myColors        <- brewer.pal(length(levels(x$assessmenttype)),"Set1")
+names(myColors) <- levels(x$assessmenttype)
+
+x %>% 
+  left_join(y, by="col") %>% 
+  ggplot(aes(x=assessmentdate, y=stockkeylabelold)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        text          = element_text(size=8),
+        legend.title  = element_blank(),
+        axis.text.x   = element_text(angle = 90, vjust = 1)) +
+  geom_point(aes(colour = assessmenttype)) +
+  scale_colour_manual(name = "assessmenttype", values = myColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%y") +
+  labs(x = "assessmentyear", y = NULL ) +
+  facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.asp=1.25}
+
+# table by assessmentyear and stock
+
+iStock %>% 
+  left_join(iStockkey, by=c("stockkey")) %>% 
+  select(stockkeylabelold, assessmentyear, assessmenttype) %>% 
+  mutate(tmp = "x") %>% 
+  data.frame() %>% 
+  # filter(stockkeylabelold =="cod-skag")
+
+  dcast(stockkeylabelold ~ assessmentyear, margins=NA) %>% 
+  write.csv(., file="D:/temp/istock.csv")
+
+
+```
+
+_Figure 4. Overview of assessment types for the different stocks (stockkeylabelold)._
+
+
+## 6. Software development
+
+## 7. Discussion
+
+## 8. Future developments
+
+
+## To do
+
+* Move the data and r code to github
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+```
+
+
