@@ -46,8 +46,7 @@ library(readxl)    # read excel files
 source("../mptools/r/my_utils.r")
 
 # Set working directory to dropbox folder
-assessdir <- paste(get_dropbox(), "/ICES Assessment database", sep="")
-advicedir  <- paste(get_dropbox(), "/ICES Advice database", sep="")
+advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # -----------------------------------------------------------------------------------------
 # load the Advice database
@@ -55,26 +54,12 @@ advicedir  <- paste(get_dropbox(), "/ICES Advice database", sep="")
 
 iAdvice <-
   readxl::read_excel(
-    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181108.xlsx", sep=""), 
+    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181111.xlsx", sep=""), 
     sheet     = "DATA",
     col_names = TRUE, 
     col_types = "text", 
     trim_ws   = FALSE) %>%
   lowcase() %>% 
-  
-  # split up advisedlandings
-  
-  # mutate(advisedlandings = gsub("\\[|\\]","",advisedlandings)) %>% 
-  # separate(advisedlandings, into=c("advisedlandingsmin","advisedlandingsmax"), sep="-") %>% 
-  # mutate(advisedlandingsmax = ifelse(is.na(advisedlandingsmax), advisedlandingsmin, advisedlandingsmax)) %>% 
-  # mutate(advisedlandingsmin = ifelse(advisedlandingsmin == advisedlandingsmax, NA, advisedlandingsmin)) %>% 
-  
-  # split up advisedcatch
-  
-  # mutate(advisedcatch = gsub("\\[|\\]","",advisedcatch)) %>% 
-  # separate(advisedcatch, into=c("advisedcatchmin","advisedcatchmax"), sep="-") %>% 
-  # mutate(advisedcatchmax = ifelse(is.na(advisedcatchmax), advisedcatchmin, advisedcatchmax)) %>% 
-  # mutate(advisedcatchmin = ifelse(advisedcatchmin == advisedcatchmax, NA, advisedcatchmin)) %>% 
   
   mutate_at(c("advisedlandingsmin", "advisedcatchmin", 
               "advisedlandingsmax", "advisedcatchmax",
@@ -101,7 +86,7 @@ save(iAdvice, file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
 
 iSpecies <-
   readxl::read_excel(
-    path=paste(assessdir, "/excel/species_list.xlsx",sep=""), 
+    path=paste(advicedir, "/excel/species_list.xlsx",sep=""), 
     col_names=TRUE, 
     col_types="text") %>%
   mutate_at(c("speciescommonname","trophicguild","fisheriesguild","sizeguild"), 
@@ -109,7 +94,7 @@ iSpecies <-
   group_by(speciesfaocode, speciesscientificname, speciescommonname) %>%
   arrange(speciesfaocode) 
 
-save(iSpecies, file=paste(assessdir, "/rdata/iSpecies.RData",sep=""))
+save(iSpecies, file=paste(advicedir, "/rdata/iSpecies.RData",sep=""))
 
 # -----------------------------------------------------------------------------------------
 # Generate iRename, iStockkey
@@ -132,11 +117,11 @@ iStockkey <-
   dplyr::select(stockkey, stockkeylabelnew, stockkeylabelold, stockarea)
   # dplyr::select(stockkey, stockkeylabelnew, stockkeylabelold, stocklongname, speciescommonname, stockarea)
 
-save(iRename,   file=paste(assessdir, "/rdata/iRename.RData",sep=""))
-save(iStockkey, file=paste(assessdir, "/rdata/iStockkey.RData",sep=""))
+save(iRename,   file=paste(advicedir, "/rdata/iRename.RData",sep=""))
+save(iStockkey, file=paste(advicedir, "/rdata/iStockkey.RData",sep=""))
 
-# write.csv(iRename, file=paste(assessdir, "/excel/iRename.csv",sep=""), row.names = FALSE)
-# write.csv(iStockkey, file=paste(assessdir, "/excel/iStockkey.csv",sep=""), row.names = FALSE)
+# write.csv(iRename, file=paste(advicedir, "/excel/iRename.csv",sep=""), row.names = FALSE)
+# write.csv(iStockkey, file=paste(advicedir, "/excel/iStockkey.csv",sep=""), row.names = FALSE)
 
 # -----------------------------------------------------------------------------------------
 # load Excel and QSC data
@@ -144,7 +129,7 @@ save(iStockkey, file=paste(assessdir, "/rdata/iStockkey.RData",sep=""))
 
 qcsexcel <-
   readxl::read_excel(
-    path= paste(assessdir, "/excel/QCS and EXCEL Assessment Database combined.xlsx", sep=""), 
+    path= paste(advicedir, "/excel/QCS and EXCEL Assessment Database combined.xlsx", sep=""), 
     sheet     = "data",
     col_names = TRUE, 
     col_types = "text", 
@@ -174,17 +159,14 @@ qcsexcel <-
             funs(as.integer)) 
 
 
-save(sag, file=paste(assessdir, "/rdata/iSAG.RData",sep=""))
-
-
-save(qcsexcel, file=paste(assessdir, "/rdata/qcsexcel.RData",sep=""))
+save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 
 # -----------------------------------------------------------------------------------------
 # load SAG full data (see: DownloadDataFromSAG.r)
 # -----------------------------------------------------------------------------------------
 
 sag <- 
-  get(load(file=paste(assessdir, "/rdata/iSAGdownload 20181023.RData",sep=""))) %>% 
+  get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181112.RData",sep=""))) %>% 
   select(-stockkey) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   left_join(iStockkey, by="stockkey") %>% 
@@ -196,12 +178,77 @@ sag <-
               "fdiscards","flandings","fibc","funallocated",
               "fpa","bpa", "flim", "blim", "fmsy", "msybtrigger"), 
             funs(as.numeric)) %>% 
-  mutate_at(c("year", "assessmentyear",
-              "recruitmentage","stockdatabaseid"), 
-            funs(as.integer)) 
+  mutate_at(c("year", "assessmentyear", "recruitmentage","stockdatabaseid"), funs(as.integer)) %>%
+  mutate_at(c("published"),  funs(as.logical)) %>% 
+  mutate_at(c("purpose"), funs(tolower)) %>% 
+  
+  # change -alt for stock assessments to purpose "alternative"
+  mutate(purpose       = ifelse(grepl("\\-alt", stockkeylabel), "alternative", purpose), 
+         stockkeylabel = ifelse(grepl("\\-alt", stockkeylabel), gsub("\\-alt","",stockkeylabel), stockkeylabel)) %>% 
+  
+  # remove erroneous assessments for blue whiting (trials?)
+  filter(!(stockkeylabel == "whb-comb" & assessmentyear == 1996)) %>% 
+  mutate(purpose = ifelse(purpose %in% c("initial advice", "initadvice", "replaced"), "withdrawn", purpose)) %>% 
+  
+  group_by(stockkey, stockkeylabel, assessmentyear, purpose, published, year) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
 
-sort(unique(sag$stockkeylabel))
+save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
+glimpse(sag)
 
+# sag %>% distinct(purpose) %>% View()
+# sag %>% distinct(published) %>% View()
+# sag %>% distinct(purpose, published) %>% View()
+
+sag %>% filter(grepl("jun", stockkeylabel)) %>% View()
+sag %>% filter(purpose == "alternative") %>% View()
+
+# 
+# sag %>% 
+#   filter(purpose == "initadvice")  %>%
+#   distinct(stockkey, stockkeylabel, assessmentyear, assessmentdate) %>%
+#   View()
+# 
+# sag %>% 
+#   filter(stockkeylabel == "had.27.46a20", assessmentyear == 2018) %>% 
+#   View()
+
+# -----------------------------------------------------------------------------------------
+# load SAG reference points (see: DownloadDataFromSAG.r)
+# -----------------------------------------------------------------------------------------
+
+sagrefpoints <- 
+  get(load(file=paste(advicedir, "/rdata/iSAGrefpoints 20181113.RData",sep=""))) %>% 
+  select(-stockkey, -stockdatabaseid) %>% 
+  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
+  left_join(iStockkey, by="stockkey") %>% 
+  mutate_at(c("flim","fpa","fmsy", "fmanagement", 
+              "blim","bpa","msybtrigger", "bmanagement"), 
+            funs(as.numeric)) %>% 
+  mutate_at(c("assessmentyear", "recruitmentage"), funs(as.integer)) 
+
+
+save(sagrefpoints, file=paste(advicedir, "/rdata/iSAGrefpoints.RData",sep=""))
+
+# Plot of number of reference points
+iAdvice %>% 
+  group_by(assessmentyear) %>% 
+  summarize(flim = sum(!is.na(flim)),
+            fpa  = sum(!is.na(fpa)),
+            fmsy = sum(!is.na(fmsy)),
+            blim = sum(!is.na(blim)),
+            bpa  = sum(!is.na(bpa)),
+            msybtrigger = sum(!is.na(msybtrigger)) ) %>% 
+  gather(key=variable, value=value, flim:msybtrigger) %>% 
+  mutate(type = ifelse(substr(variable,1,1) == "f", "fishing mortality", "biomass")) %>% 
+
+  
+  ggplot(aes(x=assessmentyear, y=value)) +
+  theme_publication() +
+  geom_line(aes(colour=factor(variable))) +
+  facet_wrap(~type)
+  
 
 # -----------------------------------------------------------------------------------------
 # load the allocation mechanism (needs to be integrated into Advice spreadsheet?)
@@ -221,30 +268,23 @@ sort(unique(sag$stockkeylabel))
 # load the STECF Fisheries Management Zones
 # -----------------------------------------------------------------------------------------
 
-# load(file=paste(assessdir, "/rdata/STECF sframe.RData",sep="")) 
+# load(file=paste(advicedir, "/rdata/STECF sframe.RData",sep="")) 
 
 
 # -----------------------------------------------------------------------------------------
 # iAssess_part1: standard graph data SAG and prepare for combining
 # -----------------------------------------------------------------------------------------
 
-sag_ <- 
-  sag %>% 
-  
-  # temporary: removing her.27.1-24a514a 2017 because of error in the export of multiple versions. 
-  filter(!(stockkeylabel == "her.27.1-24a514a" & assessmentyear == 2017))  %>% 
-  mutate(purpose = tolower(purpose))
-
-
 # Extract list of fishstock and assessment years from SAG database
 sag_unique <-
-  sag_ %>% 
-  distinct(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
+  sag %>% 
+  distinct(stockkey, stockkeylabel, assessmentyear, purpose, published) %>% 
   ungroup()
 
 # filter(sag_, grepl("ang-kask", stockkeylabel)) %>% View()
 # filter(sag_unique, grepl("nop", stockkeylabel)) %>% View()
 # filter(sag_unique, is.na(stockkey)) %>% View()
+# filter(sag_unique, !published & purpose=="advice") %>% View()
 # glimpse(iAssess_part1)
 
 # -----------------------------------------------------------------------------------------
@@ -279,12 +319,12 @@ only_in_sag <-
 # -----------------------------------------------------------------------------------------
 
 t1 <-
-  only_in_qcsexcel %>% 
+  bind_rows(incommon, only_in_qcsexcel) %>% 
   left_join(qcsexcel_, by=c("stockkey","stockkeylabel", "assessmentyear", "purpose")) %>% 
   mutate(source = "excel")
 
 t2 <-
-  bind_rows(incommon, only_in_sag) %>% 
+  only_in_sag %>% 
   left_join(sag_, by=c("stockkey","stockkeylabel", "assessmentyear", "purpose")) %>% 
   dplyr::select(one_of(names(t1))) %>% 
   mutate(source = "sag")
@@ -292,26 +332,41 @@ t2 <-
 t3 <-
   iAdvice %>% 
   ungroup() %>% 
-  rename(year = assessmentyear, stocksize = ssbay) %>% 
-  dplyr::select(one_of(names(t1))) %>% 
-  mutate(source = "iAdvice") %>% 
-  # filter(grepl("mac-w|mac-n", stockkeylabelold))
-  # filter(grepl("hom-w", stockkeylabelold))
-  filter(grepl("her-4", stockkeylabelold))
+  select(stockkey, stockkeylabel, assessmentyear, assessmentdate, assessmenttype, 
+         flim, fpa, fmsy,
+         blim, bpa, msybtrigger,
+         assessmentmodel, assessmentscale,
+         firstyearofdata, agerange, ncpueseries, nsurveyseries) %>%
+  rename(purpose=assessmenttype) %>% 
+  mutate(purpose = tolower(purpose),
+         purpose = ifelse(is.na(purpose), "advice", purpose)) 
+
+iAssess <-
+  bind_rows(t1, t2) %>% 
+  # filter(purpose=="advice") %>% 
+  left_join(t3, by=c("stockkey","stockkeylabel","assessmentyear", "assessmentdate", "purpose"))
+
+# test unique fields
+iAdvice %>% 
+  filter(grepl("whb", stockkeylabel)) %>% 
+  distinct(stockkey, stockkeylabel, assessmentyear, assessmentdate, assessmenttype) %>% 
+  View()
 
 bind_rows(t1, t2) %>% 
-  # filter(grepl("hom-w", stockkeylabelold)) %>%
-  filter(grepl("her-4", stockkeylabelold)) %>%
-  # filter(grepl("mac", stockkeylabelold)) %>%
-  filter(purpose=="advice") %>% 
-  ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
-  theme_publication() +
-  geom_line(aes(colour=factor(source))) +
-  
-  geom_path(data=t3, aes(x=year,y=stocksize), colour="black", inherit.aes = FALSE) +
-  geom_point(data=t3, aes(x=year,y=stocksize), colour="black", inherit.aes = FALSE) +
-  
-  expand_limits(y=0)
+  filter(grepl("whb", stockkeylabel)) %>% 
+  distinct(stockkey, assessmentyear, assessmentdate, purpose, source) %>%
+  arrange(stockkey, assessmentyear) %>% 
+  View()
+
+
+  # ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
+  # theme_publication() +
+  # geom_line(aes(colour=factor(source))) +
+  # 
+  # geom_path(data=t3, aes(x=year,y=stocksize), colour="black", inherit.aes = FALSE) +
+  # geom_point(data=t3, aes(x=year,y=stocksize), colour="black", inherit.aes = FALSE) +
+  # 
+  # expand_limits(y=0)
 
 # number of benchmarks
 iAdvice %>% 
@@ -323,6 +378,13 @@ iAdvice %>%
   geom_line(colour="red")
 
 
+# check blue whiting
+bind_rows(t1, t2) %>% 
+  filter(grepl("whb", stockkeylabelold)) %>%
+  filter(assessmentyear < 1997) %>% 
+  View()
+
+  
 # number of changes in reference points 
 
 
@@ -486,7 +548,7 @@ iAssess <-
   ungroup() %>% 
   as.data.frame()
 
-save(iAssess, file=paste(assessdir, "/rdata/iAssess.RData",sep=""))
+save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 # load(file="rdata/iAssess.RData")
 
 # filter(iAssess, assessmentyear == 2017 & grepl("mac", stockkeylabel)) %>% View()

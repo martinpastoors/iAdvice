@@ -161,15 +161,18 @@ qcsexcel %>%
   summarize(nyears = n()) %>% 
   View()
 
-qcsexcel %>% 
-  
-  filter(grepl("her-47d", stockkeylabelold)) %>%
+# qcsexcel %>% 
+# bind_rows(t1, t2)  %>% 
+  iAssess %>% 
+  # filter(grepl("her-47d", stockkeylabelold)) %>%
   # filter(grepl("mac", substr(stockkeylabelold,1,3))) %>% 
+  filter(grepl("whb", substr(stockkeylabelold,1,3))) %>%
   
   filter(tolower(purpose) == "advice") %>% 
   filter(year >= assessmentyear - 10 ) %>% 
   
-  filter(assessmentyear < 1990) %>% 
+  # filter(assessmentyear < 1990) %>% 
+  View()
   
   mutate(
     decade = as.character(10*floor(assessmentyear/10)),
@@ -178,7 +181,7 @@ qcsexcel %>%
 
   ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
   theme_publication() +
-  geom_line(aes(colour=factor(decade))) +
+  geom_line(aes(colour=factor(assessmentmodel))) +
   geom_dl(aes(label  = tyear, colour = decade), 
           method = list(dl.combine("last.points"), cex = 0.8)) +
   
@@ -186,6 +189,12 @@ qcsexcel %>%
   # facet_wrap(~decade, scales = "free_x") 
   facet_wrap(~assessmentyear, scales = "free_x") 
 
+
+# Check redfish
+
+sag %>% 
+  filter(grepl("reg", stockkeylabel)) %>% 
+  distinct(stockkeylabel, assessmentyear)
 
 # -----------------------------------------------------------------------------------------
 # Below is old code that needs revising. 

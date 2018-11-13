@@ -25,19 +25,25 @@ options(icesSAG.use_token = TRUE)
 source("../mptools/r/my_utils.r")
 
 # Set dropbox folder
-assessdir <- paste(get_dropbox(), "/ICES Assessment database", sep="")
+assessdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # =====================================================================================
-# Download all assessments in SAG in full
+# generate list of assessmentkeys
 # =====================================================================================
 
 assessmentkeys <- sort(findAssessmentKey())
 # getStockDownloadData(7306)
 
+# =====================================================================================
+# Download all assessments in SAG in full
+# =====================================================================================
+
 # Download all the stock data - takes a long time
 t1  <- getStockDownloadData(assessmentkeys)
 
 t2 <- data.frame()
+
+# loop over all assessments to bind them together
 for (i in 1:length(t1)) {
   
   print(i)
@@ -50,10 +56,42 @@ for (i in 1:length(t1)) {
   }
 }
 
+# Create iSAGdownload with distinct rows
 iSAGdownload <- 
   t2 %>% 
-  lowcase()
+  lowcase() %>% 
+  
+  # keep only distinct rows
+  distinct()
 
+
+# Save file
 today <- format(Sys.time(), '%Y%m%d')
 save(iSAGdownload, file=paste0(assessdir, "/rdata/iSAGdownload ", today, ".RData"))
 
+
+# =====================================================================================
+# Download all the reference point data
+# =====================================================================================
+
+t4 <- getFishStockReferencePoints(assessmentkeys)
+
+iSAGrefpoints <- data.frame()
+
+# loop over all assessments to bind them together
+for (i in 1:length(t4)) {
+  
+  print(i)
+  if (!is.null(t4[[i]])) {
+    tmp <-
+      t4[[i]] %>% 
+      mutate_all(funs("as.character"))
+    
+    iSAGrefpoints  <- bind_rows(iSAGrefpoints, tmp)
+  }
+}
+
+iSAGrefpoints %>% 
+  lowcase() %>% 
+  distinct() %>% 
+  save(file=paste0(assessdir, "/rdata/iSAGrefpoints ", today, ".RData"))
