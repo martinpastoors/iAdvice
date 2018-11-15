@@ -3,6 +3,7 @@
 #
 # 21/03/2018 First coding of adding historical data to standardgraphs
 # 27/04/2018 Change to Historical in the Purpose Field
+# 15/11/2018 Change just the comments of an assessment (trial)
 # ============================================================================
 
 rm(list=ls())
@@ -11,9 +12,7 @@ rm(list=ls())
 # devtools::install_github("ices-tools-prod/icesSAG")
 
 library(icesSAG)
-library(icesSD)
 library(tidyverse)
-library(directlabels)  # for printing labels at end of geom lines
 
 # use token
 options(icesSAG.use_token = TRUE)
@@ -22,27 +21,37 @@ options(icesSAG.use_token = TRUE)
 source("../mptools/r/my_utils.r")
 
 # Set dropbox folder
-dropboxdir <- paste(get_dropbox(), "/ICES Assessment database", sep="")
+advicedir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # Download and mutate the data for stock and year
-rby <- 
-  getSAG("her-47d3",year = 2002) %>% 
-  mutate(landings = ifelse(landings == 0, NA, landings))
-  
+rby <- getStockDownloadData(9331)[[1]]
+rp  <- getFishStockReferencePoints(9331)[[1]]
 
 # Create the input data for uploading  
-info     <- stockInfo(StockCode      = unique(rby$fishstock), 
+info     <- stockInfo(StockCode      = unique(rby$StockKeyLabel), 
                       AssessmentYear = unique(rby$AssessmentYear), 
                       ContactPerson  = "martin.pastoors@gmail.com")
+# UNFINISHED !!!
+t <-
+  rby %>% 
+  dplyr::select(one_of(names(info))) %>% 
+  distinct() %>% 
+  bind_cols (rp %>% dplyr::select(one_of(names(info))))
 
+xy.list <- as.list(as.data.frame(t))
+xy.list <- split(t, seq(ncol(t)))
+
+                 
+                 
 info$StockCategory             <- NA
-info$MSYBtrigger               <- NA
-info$Blim                      <- 800000
-info$Bpa                       <- 1300000
-info$Flim                      <- NA
-info$Fpa                       <- 0.25 
-info$FMSY                      <- NA
-info$Fage                      <- "2-6"
+info$MSYBtrigger               <- rp$MSYBtrigger
+info$Blim                      <- rp$Blim
+info$Bpa                       <- rp$Bpa
+info$Flim                      <- rp$FLim
+info$Fpa                       <- rp$Fpa
+info$FMSY                      <- rp$FMSY
+if("Fage"           %in% colnames(rby)) {info$Fage <- unique(rby$Fage)} else {info$Fage <- NA }
+if("RecruitmentAge" %in% colnames(rby)) {info$RecruitmentAge <- unique(rby$RecruitmentAge)} else {info$RecruitmentAge <- NA }
 info$RecruitmentAge            <- 0
 info$CatchesCatchesUnits       <- unique(rby$units[!is.na(rby$units)])
 info$RecruitmentDescription    <- "wr"
@@ -56,6 +65,7 @@ info$Purpose                   <- "Advice"
 # info$CustomLimitValue1        <- 800000
 
 fishdata <- stockFishdata(min(rby$Year):max(rby$Year))
+fishdata <- rby %>% dplyr::select(one_of(names(fishdata))) 
 
 fishdata$Landings              <- rby$landings
 fishdata$Catches               <- rby$catches

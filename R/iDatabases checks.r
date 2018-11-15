@@ -17,12 +17,10 @@ library(directlabels)  # for printing labels at end of geom lines
 source("../mptools/r/my_utils.r")
 
 # Set working directory to dropbox folder
-assessdir <- paste(get_dropbox(), "/ICES Assessment database", sep="")
-advicedir  <- paste(get_dropbox(), "/ICES Advice database", sep="")
+advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
-# load(file=paste(assessdir, "/rdata/iStock.RData",sep=""))
-# load(file=paste(assessdir, "/rdata/qcsexcel.RData",sep=""))
-
+# load(file=paste(advicedir, "/rdata/iStock.RData",sep=""))
+# load(file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 # load(file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
 
 # -----------------------------------------------------------------------------------------
@@ -191,53 +189,132 @@ qcsexcel %>%
 
 
 # Check redfish
-
 sag %>% 
   filter(grepl("reg", stockkeylabel)) %>% 
   distinct(stockkeylabel, assessmentyear)
 
-# -----------------------------------------------------------------------------------------
-# Below is old code that needs revising. 
-# -----------------------------------------------------------------------------------------
-
-# filter on methods
-sagdb %>% 
-  filter(assessmentmodel %in% c("xsa","ica","vpa","ls","sam","xsm", "tsa", "trends only", "surba","sms")) %>% 
+# Check blue whiting
+sag %>% 
+  filter(grepl("whb", stockkeylabel)) %>% 
+  filter(assessmentyear == 1996) %>% 
   View()
 
-# check assessmentypes used
-sagdb %>% 
-  group_by(fishstock, assessmentyear) %>% 
-  filter(row_number() == 1) %>% 
-  filter(!is.na(assesstype)) %>% 
-  select(fishstock, assessmentyear, stockpublishnote, status, assesstype) %>% 
+# Check number of assessments per year in SAG database (only with SSB data)
+# qcsexcel %>% 
+sag %>% 
+  
+  # filter only with stocksize
+  filter(!is.na(stocksize)) %>% 
+  
+  # remove certain species
+  filter(!grepl("nep", stockkeylabel)) %>% 
+  filter(!grepl("^rj", stockkeylabel)) %>% 
+  
+  # generate fao code
+  mutate(speciesfaocode = substr(stockkeylabel, 1, 3)) %>% 
+  
+  # select herring
+  # filter(speciesfaocode == "her") %>% 
+  
+  # select year
+  # filter(assessmentyear == 2015) %>% 
+  
+  distinct(stockkey, stockkeylabelold, speciesfaocode, assessmentyear, purpose) %>% 
+  group_by(speciesfaocode, assessmentyear) %>% 
+  summarize(n = n()) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=n)) +
+  theme_publication() +
+  theme(
+    legend.position = "none"
+  ) +
+  geom_bar(aes(fill=factor(speciesfaocode)), stat="identity", position="stack") +
+  facet_wrap(~speciesfaocode)
+
+# plot assessments in common between excel and sag
+t1 <-
+  incommon %>% 
+  left_join(sag, by=c("stockkey","stockkeylabel", "assessmentyear", "purpose")) %>% 
+  mutate(source = "sag")
+
+t2 <-
+  incommon %>% 
+  left_join(qcsexcel, by=c("stockkey","stockkeylabel", "assessmentyear","purpose")) %>% 
+  dplyr::select(one_of(names(t1))) %>% 
+  mutate(source = "excel")
+
+bind_rows(t1, t2) %>% 
+  filter(!is.na(stocksize)) %>% 
+  group_by(stockkey, assessmentyear, source) %>% 
+  summarize(n=n(), 
+            stocksize = sum(stocksize, na.rm = TRUE)) %>% 
+  ggplot(aes(x=assessmentyear, y=stocksize, group=source)) +
+  theme_publication() +
+  geom_line(aes(colour=source)) +
+  facet_wrap(~stockkey, scales="free_y")
+
+bind_rows(t1, t2) %>% 
+  filter(!is.na(stocksize)) %>% 
+  group_by(stockkey, assessmentyear, source, purpose) %>% 
+  summarize(n=n(), 
+            stocksize = sum(stocksize, na.rm = TRUE)) %>% 
+  filter(stockkey == 169123) %>% 
   View()
 
-# check stocksizedescriptions used
-sagdb %>% 
-  group_by(fishstock, assessmentyear) %>% 
-  filter(row_number() == 1) %>% 
-  group_by(stocksizedescription) %>% 
-  summarise(n = n()) %>% 
-  arrange(stocksizedescription) %>% 
+sag %>% 
+  filter(stockkey==169108) %>% 
+  filter(assessmentyear ==2014) %>% 
+  ggplot(aes(x=year, y=stocksize, group=published)) +
+  theme_publication() +
+  geom_line(aes(colour=published))
+
+t1 %>% 
+  filter(!is.na(stocksize)) %>% 
+  distinct() %>% 
+  group_by(assessmentkey, stockkey, stockkeylabel, assessmentyear, purpose, year, source) %>% 
+  summarize(n=n(),
+            stocksize = sum(stocksize, na.rm = TRUE)) %>%
+  filter(stockkey == 169142) %>% 
   View()
 
-filter(sagdb, is.na(commonname)) %>% View()
+# make overview of different types of advice per stock and assessmentyear
+sag %>% 
+  ungroup() %>% 
+  filter(!is.na(stockkey)) %>% 
+  mutate(combvar = paste(purpose,published, sep="/")) %>% 
+  distinct(stockkey, stockkeylabel, assessmentyear, combvar) %>%
+  group_by(stockkey, stockkeylabel, assessmentyear) %>% 
+  summarize(text = paste(combvar, collapse=" ")) %>% 
+  spread(key=assessmentyear, value=text) %>% 
+  View()
 
-sort(unique(sagdb$stocksizeunits))
-filter(sagdb, is.na(fishstocknew)) %>% View()
-filter(sagdb, is.na(commonname)) %>% View()
-filter(sagdb, is.na(stocksizeunits)) %>% View()
-filter(sagdb, stocksizedescription == "stock size" & stocksizeunits == "tonnes") %>% View()
-filter(sagdb, grepl("ratio", stocksizeunits)) %>% View()
+# make overview of assessments that have more than one assessment in a year
+sag %>% 
+  filter(!is.na(stockkey)) %>% 
+  distinct(stockkey, stockkeylabel, assessmentyear, purpose, published) %>%
+  group_by(stockkey, stockkeylabel, assessmentyear) %>% 
+  mutate(n = n()) %>% 
+  filter(n>1) %>% 
+  select(assessmentyear, stockkey, stockkeylabel, purpose, published) %>% 
+  arrange(assessmentyear, stockkey, stockkeylabel, purpose, published) %>% 
+  write.csv(., file="duploassessments.csv")
 
-filter(sagdownload, grepl("cod-arct", fishstockold)) %>% View()
-filter(sagexcel, grepl("cod-arct", fishstockold)) %>% View()
-filter(sagexcel_toadd, grepl("cod-arct", fishstockold)) %>% View()
-filter(sagdb, grepl("cod-arct", fishstockold)) %>% group_by(assessmentyear) %>% filter(row_number()==1) %>% 
-  arrange(assessmentyear) %>% View()
+# plot by purpose
+qcsexcel %>% 
+  # sag %>% 
+  distinct(stockkey, stockkeylabel, assessmentyear, purpose, published) %>% 
+  group_by(assessmentyear, purpose) %>% 
+  summarize(n=n()) %>% 
+  ggplot(aes(x=assessmentyear, y=n)) +
+  theme_publication() +
+  geom_bar(aes(fill=purpose), stat="identity")
 
-filter(sagdb, grepl("mac-nea", fishstockold), assessmentyear==2013) %>% View()
-filter(sagexcel_toadd, grepl("her-47d3", fishstock), assessmentyear==2017) %>% View()
-filter(sagdownload, grepl("mac-nea", fishstock), assessmentyear==2013) %>% View()
+# plot by published
+sag %>% 
+  distinct(stockkey, stockkeylabel, assessmentyear, purpose, published) %>% 
+  group_by(assessmentyear, published) %>% 
+  summarize(n=n()) %>% 
+  ggplot(aes(x=assessmentyear, y=n)) +
+  theme_publication() +
+  geom_bar(aes(fill=published), stat="identity")
 
