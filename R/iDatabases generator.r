@@ -57,7 +57,7 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 iAdvice <-
   readxl::read_excel(
-    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181111.xlsx", sep=""), 
+    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181116.xlsx", sep=""), 
     sheet     = "DATA",
     col_names = TRUE, 
     col_types = "text", 
@@ -228,8 +228,11 @@ sag <-
          stockkeylabel = ifelse(grepl("\\-alt", stockkeylabel), gsub("\\-alt","",stockkeylabel), stockkeylabel)) %>% 
   
   # remove all data prior to 2001
-  # filter(assessmentyear >= 2001) %>% 
+  filter(assessmentyear >= 2001) %>% 
   
+  # remove specific assessments
+  filter(!(stockkeylabel == "whb.27.1-91214" & assessmentyear == 2010)) %>%   # This one is double with the whb-comb assessment 
+
   mutate(purpose = ifelse(purpose %in% c("initadvice"), "initial advice", purpose)) %>% 
   
   # Deal with Norway pout stockkeylabels and initial advice
@@ -245,6 +248,7 @@ sag <-
   # filter(row_number() == 1) %>% 
   ungroup() %>% 
   
+  # Only keep distinct rows
   distinct()
 
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
@@ -268,6 +272,7 @@ save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 
 # sag %>% filter(grepl("jun", stockkeylabel)) %>% View()
 # sag %>% filter(purpose == "alternative") %>% View()
+# sag %>% filter(is.na(purpose)) %>% View()
 
 # 
 # sag %>% 
@@ -376,9 +381,17 @@ t2 <-
   dplyr::select(one_of(names(t1))) %>% 
   mutate(source = "excel")
 
+# iAdvice (only model specifications)
+t3 <-
+  iAdvice %>% 
+  dplyr::select(stockkey, assessmentyear, purpose, assessmentmodel) %>% 
+  mutate_at(c("assessmentmodel"), funs(tolower))
+
 # generate iAssess
 iAssess <-
-  bind_rows(t1, t2) 
+  bind_rows(t1, t2) %>% 
+  left_join(t3, by=c("stockkey", "assessmentyear", "purpose"))
+
 
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 

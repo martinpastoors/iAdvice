@@ -159,18 +159,30 @@ qcsexcel %>%
   summarize(nyears = n()) %>% 
   View()
 
-# qcsexcel %>% 
-# bind_rows(t1, t2)  %>% 
-  iAssess %>% 
+# -----------------------------------------------------------------------------------------
+# Plot of historic retro
+# -----------------------------------------------------------------------------------------
+
+iAssess %>% 
   # filter(grepl("her-47d", stockkeylabelold)) %>%
-  # filter(grepl("mac", substr(stockkeylabelold,1,3))) %>% 
-  filter(grepl("whb", substr(stockkeylabelold,1,3))) %>%
+  # filter(grepl("mac-678ab|mac-nea|mac-west", stockkeylabelold)) %>% 
+  # filter(grepl("whb", substr(stockkeylabelold,1,3))) %>%
+  # filter(grepl("ple-n", stockkeylabelold)) %>% 
+  
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns", stockkeylabelold)) %>%
+  mutate(speciesfaocode = substr(stockkeylabelold, 1, 3)) %>% 
   
   filter(tolower(purpose) == "advice") %>% 
-  filter(year >= assessmentyear - 10 ) %>% 
   
+  # filter(assessmentyear == 2016) %>% 
+  # filter(is.na(assessmentmodel)) %>%
+  # View()
+  
+  filter(year >= assessmentyear - 10 ) %>% 
+  # filter(assessmentyear == 2010) %>% 
+  filter(year <= assessmentyear -3) %>% 
   # filter(assessmentyear < 1990) %>% 
-  View()
+  
   
   mutate(
     decade = as.character(10*floor(assessmentyear/10)),
@@ -180,13 +192,63 @@ qcsexcel %>%
   ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
   theme_publication() +
   geom_line(aes(colour=factor(assessmentmodel))) +
-  geom_dl(aes(label  = tyear, colour = decade), 
-          method = list(dl.combine("last.points"), cex = 0.8)) +
-  
+  geom_dl(aes(label  = tyear, colour = assessmentmodel), method = list(dl.combine("last.points"), cex = 0.8)) +
+  guides(colour=guide_legend(title="Model", nrow=1)) +
   expand_limits(y=0) +
-  # facet_wrap(~decade, scales = "free_x") 
-  facet_wrap(~assessmentyear, scales = "free_x") 
+  facet_wrap(~speciesfaocode, scales="free_y")
+  # facet_wrap(~decade, scales="free_x") 
+  # facet_wrap(~assessmentyear, scales = "free_x") 
 
+
+# -----------------------------------------------------------------------------------------
+# Apply 2 over 3 rule
+# -----------------------------------------------------------------------------------------
+
+iAssess %>% 
+
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns", stockkeylabelold)) %>%
+  mutate(speciesfaocode = substr(stockkeylabelold, 1, 3)) %>% 
+  
+  filter(tolower(purpose) == "advice") %>% 
+  filter(year >= assessmentyear - 10 ) %>% 
+
+  mutate(
+    decade = as.character(10*floor(assessmentyear/10)),
+    tyear  = substr(as.character(assessmentyear),3,4),
+    code   = ifelse(year >= (assessmentyear - 2) & year <= (assessmentyear -1), "x2", NA ),
+    code   = ifelse(year >= (assessmentyear - 5) & year <= (assessmentyear -3), "x3", code)
+  ) %>% 
+  
+  filter(!is.na(code)) %>% 
+  
+  group_by(speciesfaocode, assessmentyear, code) %>% 
+  summarize(stocksize = mean(stocksize, na.rm=TRUE)) %>% 
+  
+  spread(key=code, value=stocksize) %>% 
+  mutate(tst = x2/x3) %>% 
+  filter(!is.na(tst)) %>% 
+  
+  ## THIS IS NOT WORKING YET !!!
+  
+  group_by(speciesfaocode) %>% 
+  mutate(trend = ifelse(is.na(lag(tst)), 1000* tst, NA),
+         trend = ifelse(is.na(trend), lag(trend)*tst, trend)) %>% 
+  View()
+
+
+
+  ggplot(aes(x=assessmentyear, y=tst, group=speciesfaocode)) +
+  theme_publication() +
+  geom_line(colour="blue") +
+  expand_limits(y=0) +
+  facet_wrap(~speciesfaocode, scales="free_y")
+# facet_wrap(~decade, scales="free_x") 
+# facet_wrap(~assessmentyear, scales = "free_x") 
+
+
+# -----------------------------------------------------------------------------------------
+# Checks on specific stocks
+# -----------------------------------------------------------------------------------------
 
 # Check redfish
 sag %>% 
@@ -196,10 +258,13 @@ sag %>%
 # Check blue whiting
 sag %>% 
   filter(grepl("whb", stockkeylabel)) %>% 
-  filter(assessmentyear == 1996) %>% 
+  filter(assessmentyear == 2010) %>% 
   View()
 
+# -----------------------------------------------------------------------------------------
 # Check number of assessments per year in SAG database (only with SSB data)
+# -----------------------------------------------------------------------------------------
+
 # qcsexcel %>% 
 sag %>% 
   
