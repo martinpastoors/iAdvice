@@ -12,6 +12,7 @@ library(pander)    # for print tables
 library(readxl)    # read excel files
 library(cowplot)   # multiplots
 library(directlabels)  # for printing labels at end of geom lines
+library(scales)    # scales and formatting
 
 # Load utils code
 source("../mptools/r/my_utils.r")
@@ -160,16 +161,41 @@ qcsexcel %>%
   View()
 
 # -----------------------------------------------------------------------------------------
-# Plot of historic retro
+# Overview of assessments by stock and year where stock size is included
 # -----------------------------------------------------------------------------------------
 
 iAssess %>% 
+  filter(!is.na(stocksize)) %>% 
+  group_by(stockkeylabelold, stockkey, assessmentyear, assessmentdate, purpose, 
+           stocksizeunits, assessmentscale, source) %>% 
+  summarize(stocksize = comma(mean(stocksize, na.rm=TRUE)))  %>% 
+  write.csv(., file="assessmentscale.csv", row.names=FALSE)
+
+
+iAssess %>% 
+  filter(stockkeylabelold == "ane-bisc", assessmentyear == 2013) %>% View()
+
+
+# -----------------------------------------------------------------------------------------
+# Plot of historic retro
+# -----------------------------------------------------------------------------------------
+
+iAssess %>%
+  
   # filter(grepl("her-47d", stockkeylabelold)) %>%
   # filter(grepl("mac-678ab|mac-nea|mac-west", stockkeylabelold)) %>% 
   # filter(grepl("whb", substr(stockkeylabelold,1,3))) %>%
-  # filter(grepl("ple-n", stockkeylabelold)) %>% 
+  # filter(grepl("cod-kat", stockkeylabelold)) %>% 
   
-  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns", stockkeylabelold)) %>%
+  # filter for assessments with an average SSB < 2
+  group_by(stockkey, assessmentyear, assessmentdate, purpose) %>% 
+  mutate(meanssb = mean(stocksize, na.rm =TRUE)) %>% 
+  filter(meanssb <= 2) %>% 
+  
+  filter(assessmentscale != "relative") %>% 
+  # View()
+
+  # filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns", stockkeylabelold)) %>%
   mutate(speciesfaocode = substr(stockkeylabelold, 1, 3)) %>% 
   
   filter(tolower(purpose) == "advice") %>% 
@@ -180,7 +206,7 @@ iAssess %>%
   
   filter(year >= assessmentyear - 10 ) %>% 
   # filter(assessmentyear == 2010) %>% 
-  filter(year <= assessmentyear -3) %>% 
+  # filter(year <= assessmentyear -3) %>% 
   # filter(assessmentyear < 1990) %>% 
   
   
@@ -195,7 +221,8 @@ iAssess %>%
   geom_dl(aes(label  = tyear, colour = assessmentmodel), method = list(dl.combine("last.points"), cex = 0.8)) +
   guides(colour=guide_legend(title="Model", nrow=1)) +
   expand_limits(y=0) +
-  facet_wrap(~speciesfaocode, scales="free_y")
+  facet_wrap(~stockkeylabelold, scales="free_y")
+  # facet_wrap(~speciesfaocode, scales="free_y")
   # facet_wrap(~decade, scales="free_x") 
   # facet_wrap(~assessmentyear, scales = "free_x") 
 
@@ -247,6 +274,18 @@ iAssess %>%
 
 
 # -----------------------------------------------------------------------------------------
+# Check on relative stock trends in qcsexcel
+# -----------------------------------------------------------------------------------------
+
+iAssess %>% 
+  group_by(stockkey, stockkeylabelold, assessmentyear, assessmentdate, purpose, assessmentscale) %>% 
+  summarize(stocksize = mean(stocksize, na.rm=TRUE)) %>% 
+  filter(stocksize <= 1 & assessmentscale == "relative") %>% 
+  distinct() %>% 
+  View()
+
+
+# -----------------------------------------------------------------------------------------
 # Checks on specific stocks
 # -----------------------------------------------------------------------------------------
 
@@ -262,7 +301,7 @@ sag %>%
   View()
 
 # -----------------------------------------------------------------------------------------
-# Check number of assessments per year in SAG database (only with SSB data)
+g.# Check number of assessments per year in SAG database (only with SSB data)
 # -----------------------------------------------------------------------------------------
 
 # qcsexcel %>% 

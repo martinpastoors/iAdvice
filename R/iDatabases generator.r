@@ -33,6 +33,7 @@
 # 06/11/2017 removed datepublished from merging (need to check!!)
 # 23/10/2018 full checking and updating of the code; now also using ICES SAGfull
 # 08/11/2018 updated files on qcsexcel and iadvice; no longer need iStock
+# 20/11/2018 small updates; making sure the database is consistently filled
 # -----------------------------------------------------------------------------------------------
 
 rm(list=ls())
@@ -57,13 +58,13 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 iAdvice <-
   readxl::read_excel(
-    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181116.xlsx", sep=""), 
+    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181120.xlsx", sep=""), 
     sheet     = "DATA",
     col_names = TRUE, 
     col_types = "text", 
     trim_ws   = FALSE) %>%
   lowcase() %>% 
-  rename(purpose = assessmentpurpose) %>% 
+  dplyr::rename(purpose = assessmentpurpose) %>% 
   
   mutate_at(c("advisedlandingsmin", "advisedcatchmin", 
               "advisedlandingsmax", "advisedcatchmax",
@@ -76,8 +77,10 @@ iAdvice <-
             funs(as.numeric)) %>%
   mutate_at(c("tacyear", "assessmentyear", "stockkey", "firstyearofdata", "ncpueseries","nsurveyseries"),
             funs(as.integer)) %>% 
-  mutate_at(c("purpose", "speciescommonname"), 
-            funs(tolower))
+  mutate_at(c("purpose", "speciescommonname", "stockkeylabel","stockkeylabelold","stockkeylabelnew",
+              "stocksizeunits","fishingpressureunits"), 
+            funs(tolower)) %>% 
+  mutate_at(c("published"), funs(as.logical))
   
 
 save(iAdvice, file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
@@ -113,6 +116,10 @@ iRename <-
   dplyr::select(stockkey, stockkeylabel, stocklongname) %>% 
   mutate(speciesfaocode = substr(stockkeylabel,1,3)) 
 
+# iRename %>% filter(grepl("had.27", stockkeylabel)) %>% View()
+# iRename %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
+# iRename %>% filter(grepl("smn-grl", stockkeylabel)) %>% View()
+
 iStockkey <-
   iAdvice %>% 
   group_by(stockkey) %>% 
@@ -122,6 +129,8 @@ iStockkey <-
   dplyr::select(stockkey, stockkeylabelnew, stockkeylabelold, stockarea) %>% 
   distinct()
   # dplyr::select(stockkey, stockkeylabelnew, stockkeylabelold, stocklongname, speciescommonname, stockarea)
+
+# iStockkey %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
 
 save(iRename,   file=paste(advicedir, "/rdata/iRename.RData",sep=""))
 save(iStockkey, file=paste(advicedir, "/rdata/iStockkey.RData",sep=""))
@@ -147,15 +156,17 @@ qcsexcel <-
   
   mutate_at(c("stockkey"),    funs(as.integer)) %>% 
   
-  mutate_at(c("unitofrecruitment", "recruitmentdescription"),    funs(tolower)) %>% 
+  mutate_at(c("unitofrecruitment", "recruitmentdescription", "stocksizedescription"),    funs(tolower)) %>% 
   
   mutate(recruitment       = ifelse(unitofrecruitment == "thousands", recruitment/1000, recruitment),
          unitofrecruitment = ifelse(unitofrecruitment == "thousands", "millions", unitofrecruitment),
          recruitment       = ifelse(unitofrecruitment == "billions", recruitment*1000, recruitment),
          unitofrecruitment = ifelse(unitofrecruitment == "billions", "millions", unitofrecruitment) ) %>% 
   
-  # remove nephrops for now
+  # remove nephrops and rays for now
   filter(tolower(substr(stockkeylabel,1,3)) != "nep") %>% 
+  filter(tolower(substr(stockkeylabel,1,3)) != "raj") %>% 
+  filter(tolower(substr(stockkeylabel,1,2)) != "rj") %>% 
   
   # make numeric
   mutate_at(c("recruitment","lowrecruitment","highrecruitment",  
@@ -176,33 +187,69 @@ qcsexcel <-
   mutate( assessmentdate = as.Date(as.numeric(assessmentdate), origin="1899-12-30")) %>% 
   
   # make lowercase
-  mutate_at(c("purpose"), funs(tolower)) %>% 
+  mutate_at(c("purpose", "unitofrecruitment", "stocksizeunits", "catcheslandingsunits", 
+              "fishingpressureunits"), funs(tolower)) %>% 
   
   # distinct rows only
-  distinct()
+  distinct() %>% 
+  
+  # now merge with iAdvice (partly) and select the relevant columns
+  left_join(dplyr::select(iAdvice, 
+                          stockkey, assessmentyear, purpose, published, assessmentscale),
+            by=c("stockkey","assessmentyear","purpose")) %>% 
+  
+  # keep the values from iAdvice (if available)
+  mutate(
+    published       = ifelse(is.na(published.y), published.x, published.y),
+    assessmentscale = ifelse(is.na(assessmentscale.y), assessmentscale.x, assessmentscale.y),
+    assessmentscale = tolower(assessmentscale)
+  )
+
   
 
 
 save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
+
 # glimpse(qcsexcel)
 # unique(qcsexcel$assessmentdate)
+# qcsexcel %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
+# qcsexcel %>% filter(is.na(stockkey)) %>% View()
 
 # -----------------------------------------------------------------------------------------
 # load Stock Database 
 # -----------------------------------------------------------------------------------------
 
-# sd <- 
-#   get(load(file=paste(advicedir, "/rdata/icesSD 20181023.RData",sep=""))) 
-  
+sd <-
+  get(load(file=paste(advicedir, "/rdata/icesSD 20181023.RData",sep=""))) %>% 
+  lowcase() %>% 
+  dplyr::select(-stockkey) %>% 
+  # dplyr::select(-stockkey, -previousstockkey, -previousstockkeylabel, -stockdatabaseid) %>% 
+  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
+  left_join(iStockkey, by="stockkey") %>% 
+  rename(assessmentyear = activeyear) 
+
+# sd %>% 
+#   filter(stockkeylabel %in% c("cod.27.24-32","pra.27.3a4a","mon.27.78abd","rjn.27.678abd")) %>% 
+#   distinct(stockkey, stockkeylabel) %>% 
+#   View()
+# 
+# sd %>% 
+#   filter(grepl("mon.27.78abd", stockkeylabel)) %>% 
+#   View()
+# 
+# sd %>% 
+#   filter(grepl("smn-grl",stockkeylabel)) %>% 
+#   View()
+
+
 # -----------------------------------------------------------------------------------------
 # load SAG full data (see: DownloadDataFromSAG.r)
 # -----------------------------------------------------------------------------------------
 
 sag <- 
   get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
-  select(-stockkey) %>% 
-  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
-  left_join(iStockkey, by="stockkey") %>% 
+  
+  rename(catcheslandingsunits = catchesladingsunits) %>% 
   
   # make numeric
   mutate_at(c("recruitment","lowrecruitment","highrecruitment",  
@@ -221,11 +268,18 @@ sag <-
   mutate_at(c("published"),  funs(as.logical)) %>% 
   
   # make lowercase
-  mutate_at(c("purpose"), funs(tolower)) %>% 
+  mutate_at(c("purpose", "stockkeylabel", "unitofrecruitment", "stocksizeunits", "stocksizedescription",
+              "catcheslandingsunits", "fishingpressureunits"), 
+            funs(tolower)) %>% 
   
   # change -alt for stock assessments to purpose "alternative"
   mutate(purpose       = ifelse(grepl("\\-alt", stockkeylabel), "alternative", purpose), 
          stockkeylabel = ifelse(grepl("\\-alt", stockkeylabel), gsub("\\-alt","",stockkeylabel), stockkeylabel)) %>% 
+  
+  # remove nephrops and rays for now
+  filter(tolower(substr(stockkeylabel,1,3)) != "nep") %>% 
+  filter(tolower(substr(stockkeylabel,1,3)) != "raj") %>% 
+  filter(tolower(substr(stockkeylabel,1,2)) != "rj") %>% 
   
   # remove all data prior to 2001
   filter(assessmentyear >= 2001) %>% 
@@ -243,21 +297,45 @@ sag <-
   mutate(purpose           = ifelse(grepl("nop-34-jun", stockkeylabel), "initial advice", purpose)) %>% 
   mutate(stockkeylabel     = ifelse(grepl("nop-34", stockkeylabel), "nop-34", stockkeylabel)) %>% 
   mutate(assessmentdate    = ymd(assessmentdatestr)) %>%
+  dplyr::select(-assessmentdatestr) %>% 
   
   # group_by(stockkey, stockkeylabel, assessmentyear, purpose, published, year) %>% 
   # filter(row_number() == 1) %>% 
   ungroup() %>% 
   
   # Only keep distinct rows
-  distinct()
+  distinct() %>% 
+  
+  # now do the stockkey transformations
+  dplyr::select(-stockkey) %>% 
+  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
+  left_join(iStockkey, by="stockkey") %>% 
+  
+  # now merge with iAdvice (partly) and select the relevant columns
+  left_join(dplyr::select(iAdvice, 
+                          stockkey, assessmentyear, purpose, assessmentscale),
+            by=c("stockkey","assessmentyear","purpose")) 
+  
 
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
+
+
 
 # glimpse(sag)
 # sag %>% distinct(purpose) %>% View()
 # sag %>% distinct(published) %>% View()
 # sag %>% distinct(purpose, published) %>% View()
 # sort(unique(sag$stockkeylabel))
+
+# t1 <- sag %>% filter(is.na(stockkey)) %>% distinct(stockkeylabel)
+# 
+# t2 <-
+#   sd %>% 
+#   filter(stockkeylabel %in% t1$stockkeylabel)
+# 
+# sag %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
+# 
+# iRename %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
 
 # get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
 #   filter(purpose=="Unofficial") %>% 
@@ -330,7 +408,12 @@ save(sagrefpoints, file=paste(advicedir, "/rdata/iSAGrefpoints.RData",sep=""))
 
 sag_unique <-
   sag %>% 
-  distinct(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
+  
+  # distinct(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
+
+  distinct(stockkey, stockkeylabel, assessmentyear, purpose, published) %>% 
+  filter(published) %>% 
+  dplyr::select(-published) %>% 
   ungroup()
 
 qcsexcel_unique <-
@@ -379,7 +462,7 @@ t2 <-
   only_in_qcsexcel %>% 
   left_join(qcsexcel, by=c("stockkey","stockkeylabel", "assessmentyear","purpose")) %>% 
   dplyr::select(one_of(names(t1))) %>% 
-  mutate(source = "excel")
+  mutate(source = tolower(source))
 
 # iAdvice (only model specifications)
 t3 <-
@@ -390,8 +473,81 @@ t3 <-
 # generate iAssess
 iAssess <-
   bind_rows(t1, t2) %>% 
-  left_join(t3, by=c("stockkey", "assessmentyear", "purpose"))
-
+  left_join(t3, by=c("stockkey", "assessmentyear", "purpose")) %>% 
+  
+  # add FAO code
+  mutate(speciesfaocode = substr(stockkeylabel, 1, 3)) %>% 
+  
+  # do unit conversions
+  mutate(
+    
+    # recruitment
+    recruitment       = ifelse(unitofrecruitment == "millions", 1000*recruitment, recruitment),
+    lowrecruitment    = ifelse(unitofrecruitment == "millions", 1000*lowrecruitment, lowrecruitment),
+    highrecruitment   = ifelse(unitofrecruitment == "millions", 1000*highrecruitment, highrecruitment),
+    unitofrecruitment = ifelse(unitofrecruitment == "millions", "thousands", unitofrecruitment),
+    
+    unitofrecruitment = ifelse(stockkeylabelold == "had-iris" & assessmentyear == 2016, "thousands", unitofrecruitment),
+    unitofrecruitment = gsub("no/","n/", unitofrecruitment),
+    unitofrecruitment = ifelse(unitofrecruitment == "select units", NA, unitofrecruitment),
+    
+    recruitmentdescription = ifelse(tolower(recruitmentdescription) == "select recruitment type", NA, recruitmentdescription),
+    
+    # stock size
+    stocksize       = ifelse(stocksizeunits == "thousand tonnes", 1000*stocksize, stocksize),
+    lowstocksize    = ifelse(stocksizeunits == "thousand tonnes", 1000*lowstocksize, lowstocksize),
+    highstocksize   = ifelse(stocksizeunits == "thousand tonnes", 1000*highstocksize, highstocksize),
+    tbiomass        = ifelse(stocksizeunits == "thousand tonnes", 1000*tbiomass, tbiomass),
+    lowtbiomass     = ifelse(stocksizeunits == "thousand tonnes", 1000*lowtbiomass, lowtbiomass),
+    hightbiomass    = ifelse(stocksizeunits == "thousand tonnes", 1000*hightbiomass, hightbiomass),
+    stocksizeunits  = ifelse(stocksizeunits == "thousand tonnes", "tonnes", stocksizeunits),
+    
+    # stocksizeunits
+    stocksizeunits  = ifelse(stocksizeunits == "cpue (kg/1000 hooks)", "kg/1000 hooks", stocksizeunits),
+    stocksizeunits  = ifelse(stocksizeunits == "n/hr", "n/hour", stocksizeunits),
+    stocksizeunits  = ifelse(stocksizeunits == "kg/h", "kg/hour", stocksizeunits),
+    stocksizeunits  = ifelse(stocksizeunits == "select units", NA, stocksizeunits),
+    
+    # stocksizedescription
+    stocksizedescription = gsub("stock size:|stock size index:","",stocksizedescription),
+    stocksizedescription = ifelse(stocksizedescription == "select stock size description", NA, stocksizedescription),
+    
+    # catcheslandingsunits
+    catcheslandingsunits = ifelse(catcheslandingsunits == "t", "tonnes", catcheslandingsunits)
+  )
+  
 
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
+
+
+iAssess %>% distinct(unitofrecruitment) %>%  View()
+iAssess %>% distinct(stocksizeunits) %>%  View()
+iAssess %>% distinct(catcheslandingsunits) %>%  View()
+iAssess %>% distinct(fishingpressureunits) %>%  View()
+iAssess %>% filter(stockkeylabelold == "ang-ivvi") %>% View() 
+  
+iAssess %>% 
+  distinct(stockkey, stockkeylabelold, assessmentyear, purpose, stocksizedescription) %>% 
+  group_by(stocksizedescription) %>% 
+  summarize(n=n()) %>% 
+  View()
+
+iAssess %>% filter(stocksizeunits == "thousand tonnes") %>% View()
+iAssess %>% filter(catcheslandingsunits == "t") %>% View()
+iAssess %>% filter(stocksizeunits == "select units" & !is.na(stocksize)) %>% View()
+iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
+
+iAssess %>% filter(year == 2016, purpose == "replace") %>% View()
+
+iAssess %>%
+  filter(stocksizeunits == "tonnes") %>%
+  # filter(stocksize > 1000000) %>% 
+  # filter(stockkeylabelold == "san-nsea") %>% 
+  ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
+  theme_publication() +
+  geom_line() +
+  expand_limits(y=0) +
+  scale_y_continuous(labels = scales::scientific_format(digits=2)) +
+  facet_wrap(~stockkeylabel, scales="free_y")
+
 

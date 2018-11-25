@@ -14,12 +14,13 @@ library(readxl)    # read excel files
 library(cowplot)   # multiplots
 library(RColorBrewer) # colours
 library(lubridate)
+# library(ggstance)  # extension to ggplot; vertical extensions; only works for ggplot >= 3.0.0
 
 # Load utils code
 source("../mptools/r/my_utils.r")
 
 # Set working directory to dropbox folder
-advicedir <- paste(get_dropbox(), "/ICES Assessment database", sep="")
+advicedir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # Load dataset
 load(file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
@@ -43,10 +44,12 @@ x <-
          stockkeylabelold = factor(stockkeylabelold, levels = rev(levels(stockkeylabelold))),
          purpose          = factor(purpose),
          purpose          = factor(purpose, levels=rev(levels(purpose))),
-         source           = factor(source, levels=c("excel","sag")),
-         column              = ifelse(id <=  90            , 1, NA),
-         column              = ifelse(id  >  90 & id <= 180, 2, column),
-         column              = ifelse(id  > 180            , 3, column),
+         published          = factor(published),
+         published          = factor(published, levels=rev(levels(published))),
+         source           = factor(source, levels=c("wg","qcs", "excel","sag")),
+         column              = ifelse(id <=  83            , 1, NA),
+         column              = ifelse(id  >  83 & id <= 166, 2, column),
+         column              = ifelse(id  > 166            , 3, column),
          speciesfaocode   = substr(stockkeylabel, 1, 3)) %>% 
   left_join(iSpecies, by="speciesfaocode")
 
@@ -55,7 +58,11 @@ mySourceColors        <- brewer.pal(max(length(levels(x$source)),3),"Set1")
 names(mySourceColors) <- levels(x$source)
 
 myPurposeColors        <- brewer.pal(length(levels(x$purpose)),"Set1")
-names(myPurposeColors) <- levels(x$purpose)
+names(myPurposeColors) <- rev(levels(x$purpose))
+
+myPublishedColors        <- brewer.pal(length(levels(x$published)),"Set1")
+names(myPublishedColors) <- rev(levels(x$published))
+
 
 # define headers for columns
 y <-
@@ -78,7 +85,7 @@ x %>%
         panel.grid.major = element_line(colour = "grey70"),
         text          = element_text(size=8),
         legend.title  = element_blank()) +
-  geom_point(aes(colour = purpose)) +
+  geom_point(aes(colour = purpose), position=position_dodge(width=0.8) ) +
   scale_colour_manual(name = "purpose", values = myPurposeColors, na.value="lightgray") +
   scale_y_discrete(position="right") +
   labs(x = "assessmentyear", y = NULL ) +
@@ -87,17 +94,34 @@ x %>%
 # plot by stock and source
 x %>% 
   left_join(y, by="column") %>% 
-  ggplot(aes(x=assessmentyear, y=stockkeylabelold)) +
+  ggplot(aes(x=assessmentyear, y=stockkeylabelold, group=source)) +
   theme_publication() +
   theme(panel.spacing = unit(1, "lines"),
         panel.grid.major = element_line(colour = "grey70"),
         text          = element_text(size=8),
         legend.title  = element_blank()) +
-  geom_point(aes(colour = source)) +
+  geom_point(aes(colour = source), position=position_dodge(width=0.8) ) +
   scale_colour_manual(name = "source", values = mySourceColors, na.value="lightgray") +
   scale_y_discrete(position="right") +
   labs(x = "assessmentyear", y = NULL ) +
   facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
+
+
+# plot by stock and published
+x %>% 
+  left_join(y, by="column") %>% 
+  ggplot(aes(x=assessmentyear, y=stockkeylabelold, group=published)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        panel.grid.major = element_line(colour = "grey70"),
+        text          = element_text(size=8),
+        legend.title  = element_blank()) +
+  geom_point(aes(colour = published), position=position_dodge(width=0.8) ) +
+  scale_colour_manual(name = "source", values = myPublishedColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  labs(x = "assessmentyear", y = NULL ) +
+  facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
+
 
 
 # Alternative plot below: by fisheries guild
