@@ -179,32 +179,35 @@ iAssess %>%
 # -----------------------------------------------------------------------------------------
 # Plot of historic retro
 # -----------------------------------------------------------------------------------------
+colourby <- "decade"
 
 iAssess %>%
   
+  filter(grepl("hom-west", stockkeylabelold)) %>%
   # filter(grepl("her-47d", stockkeylabelold)) %>%
   # filter(grepl("mac-678ab|mac-nea|mac-west", stockkeylabelold)) %>% 
   # filter(grepl("whb", substr(stockkeylabelold,1,3))) %>%
   # filter(grepl("cod-kat", stockkeylabelold)) %>% 
   
   # filter for assessments with an average SSB < 2
-  group_by(stockkey, assessmentyear, assessmentdate, purpose) %>% 
-  mutate(meanssb = mean(stocksize, na.rm =TRUE)) %>% 
-  filter(meanssb <= 2) %>% 
+  # group_by(stockkey, assessmentyear, assessmentdate, purpose) %>% 
+  # mutate(meanssb = mean(stocksize, na.rm =TRUE)) %>% 
+  # filter(meanssb <= 2) %>% 
   
-  filter(assessmentscale != "relative") %>% 
+  # filter(assessmentscale != "relative") %>% 
   # View()
 
   # filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns", stockkeylabelold)) %>%
   mutate(speciesfaocode = substr(stockkeylabelold, 1, 3)) %>% 
   
-  filter(tolower(purpose) == "advice") %>% 
+  # filter(tolower(purpose) == "advice") %>% 
+  filter(!grepl("benchmark", purpose)) %>% 
   
   # filter(assessmentyear == 2016) %>% 
   # filter(is.na(assessmentmodel)) %>%
   # View()
   
-  filter(year >= assessmentyear - 10 ) %>% 
+  # filter(year >= assessmentyear - 10 ) %>% 
   # filter(assessmentyear == 2010) %>% 
   # filter(year <= assessmentyear -3) %>% 
   # filter(assessmentyear < 1990) %>% 
@@ -217,9 +220,10 @@ iAssess %>%
 
   ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
   theme_publication() +
-  geom_line(aes(colour=factor(assessmentmodel))) +
-  geom_dl(aes(label  = tyear, colour = assessmentmodel), method = list(dl.combine("last.points"), cex = 0.8)) +
-  guides(colour=guide_legend(title="Model", nrow=1)) +
+  geom_line(aes(colour=factor(get(colourby)))) +
+  geom_dl(aes(label  = tyear, colour = get(colourby)), 
+          method = list(dl.combine("last.points"), cex = 0.8)) +
+  guides(colour=guide_legend(title=colourby, nrow=1)) +
   expand_limits(y=0) +
   facet_wrap(~stockkeylabelold, scales="free_y")
   # facet_wrap(~speciesfaocode, scales="free_y")
@@ -290,8 +294,9 @@ iAssess %>%
 # -----------------------------------------------------------------------------------------
 
 # Check redfish
-sag %>% 
-  filter(grepl("reg", stockkeylabel)) %>% 
+sag_unique %>% 
+  left_join(sag, by=c("assessmentyear", "stockkey", "stockkeylabel", "purpose")) %>% 
+  filter(grepl("hom", stockkeylabel)) %>% 
   distinct(stockkeylabel, assessmentyear)
 
 # Check blue whiting
@@ -301,7 +306,7 @@ sag %>%
   View()
 
 # -----------------------------------------------------------------------------------------
-g.# Check number of assessments per year in SAG database (only with SSB data)
+# Check number of assessments per year in SAG database (only with SSB data)
 # -----------------------------------------------------------------------------------------
 
 # qcsexcel %>% 

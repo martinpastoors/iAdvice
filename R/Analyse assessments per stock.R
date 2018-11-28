@@ -29,11 +29,14 @@ load(file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 # plots of assessments by assessment year and purpose
 # ---------------------------------------------------------------------------------------------
 
+splitter <- 37
+
 x <-
   iAssess %>% 
   mutate_at(c("stockkeylabel","stockkeylabelold"), funs(tolower)) %>% 
   filter(!grepl("nep", stockkeylabel)) %>% 
   filter(!grepl("^rj", stockkeylabel)) %>% 
+  filter(speciesfaocode %in% c("cod","her","hom","mac","whb","ple","sol")) %>% 
   
   distinct(stockkey, stockkeylabel, stockkeylabelold, assessmentyear, purpose, published, source) %>% 
   mutate(stockkeylabelold = ifelse(is.na(stockkeylabelold), stockkeylabel, stockkeylabelold)) %>% 
@@ -47,9 +50,9 @@ x <-
          published          = factor(published),
          published          = factor(published, levels=rev(levels(published))),
          source           = factor(source, levels=c("wg","qcs", "excel","sag")),
-         column              = ifelse(id <=  83            , 1, NA),
-         column              = ifelse(id  >  83 & id <= 166, 2, column),
-         column              = ifelse(id  > 166            , 3, column),
+         column              = ifelse(id <=  splitter            , 1, NA),
+         column              = ifelse(id  >  splitter & id <= 2*splitter, 2, column),
+         column              = ifelse(id  > 2*splitter            , 3, column),
          speciesfaocode   = substr(stockkeylabel, 1, 3)) %>% 
   left_join(iSpecies, by="speciesfaocode")
 
@@ -75,6 +78,20 @@ y <-
   group_by(column) %>% 
   summarise(code = paste(stockkeylabelold, collapse=" : "))
 
+# plot by stock and source
+x %>% 
+  left_join(y, by="column") %>% 
+  ggplot(aes(x=assessmentyear, y=stockkeylabelold, group=source)) +
+  theme_publication() +
+  theme(panel.spacing = unit(1, "lines"),
+        panel.grid.major = element_line(colour = "grey70"),
+        text          = element_text(size=8),
+        legend.title  = element_blank()) +
+  geom_point(aes(colour = source), position=position_dodge(width=0.8), size=2 ) +
+  scale_colour_manual(name = "source", values = mySourceColors, na.value="lightgray") +
+  scale_y_discrete(position="right") +
+  labs(x = "assessmentyear", y = NULL ) +
+  facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
 
 # plot by stock and purpose
 x %>% 
@@ -91,20 +108,7 @@ x %>%
   labs(x = "assessmentyear", y = NULL ) +
   facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
 
-# plot by stock and source
-x %>% 
-  left_join(y, by="column") %>% 
-  ggplot(aes(x=assessmentyear, y=stockkeylabelold, group=source)) +
-  theme_publication() +
-  theme(panel.spacing = unit(1, "lines"),
-        panel.grid.major = element_line(colour = "grey70"),
-        text          = element_text(size=8),
-        legend.title  = element_blank()) +
-  geom_point(aes(colour = source), position=position_dodge(width=0.8) ) +
-  scale_colour_manual(name = "source", values = mySourceColors, na.value="lightgray") +
-  scale_y_discrete(position="right") +
-  labs(x = "assessmentyear", y = NULL ) +
-  facet_wrap(~code, scales="free_y", shrink=TRUE, ncol=3)
+
 
 
 # plot by stock and published

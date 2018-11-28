@@ -34,6 +34,7 @@
 # 23/10/2018 full checking and updating of the code; now also using ICES SAGfull
 # 08/11/2018 updated files on qcsexcel and iadvice; no longer need iStock
 # 20/11/2018 small updates; making sure the database is consistently filled
+# 26/11/2018 added comparison to the data used by Esther Schuch
 # -----------------------------------------------------------------------------------------------
 
 rm(list=ls())
@@ -58,7 +59,7 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 iAdvice <-
   readxl::read_excel(
-    path= paste(advicedir, "/Excel/ICES Scientific Advice database 20181120.xlsx", sep=""), 
+    path= paste(advicedir, "/Excel/ICES Scientific Advice database.xlsx", sep=""), 
     sheet     = "DATA",
     col_names = TRUE, 
     col_types = "text", 
@@ -478,6 +479,16 @@ iAssess <-
   # add FAO code
   mutate(speciesfaocode = substr(stockkeylabel, 1, 3)) %>% 
   
+  # descriptions and units to lowercase
+  mutate_at(c("unitofrecruitment", "recruitmentdescription",
+              "stocksizeunits", "stocksizedescription",
+              "fishingpressureunits", "fishingpressuredescription",
+              "catcheslandingsunits"), funs(tolower(str_trim(., side="both")))) %>% 
+  mutate_at(c("unitofrecruitment", "recruitmentdescription",
+              "stocksizeunits", "stocksizedescription",
+              "fishingpressureunits", "fishingpressuredescription",
+              "catcheslandingsunits"), funs(str_trim(.))) %>% 
+  
   # do unit conversions
   mutate(
     
@@ -491,7 +502,7 @@ iAssess <-
     unitofrecruitment = gsub("no/","n/", unitofrecruitment),
     unitofrecruitment = ifelse(unitofrecruitment == "select units", NA, unitofrecruitment),
     
-    recruitmentdescription = ifelse(tolower(recruitmentdescription) == "select recruitment type", NA, recruitmentdescription),
+    recruitmentdescription = ifelse(recruitmentdescription == "select recruitment type", NA, recruitmentdescription),
     
     # stock size
     stocksize       = ifelse(stocksizeunits == "thousand tonnes", 1000*stocksize, stocksize),
@@ -509,45 +520,128 @@ iAssess <-
     stocksizeunits  = ifelse(stocksizeunits == "select units", NA, stocksizeunits),
     
     # stocksizedescription
-    stocksizedescription = gsub("stock size:|stock size index:","",stocksizedescription),
+    stocksizedescription = gsub("stock size: |stock size index: ","",stocksizedescription),
     stocksizedescription = ifelse(stocksizedescription == "select stock size description", NA, stocksizedescription),
     
     # catcheslandingsunits
-    catcheslandingsunits = ifelse(catcheslandingsunits == "t", "tonnes", catcheslandingsunits)
+    catcheslandingsunits = ifelse(catcheslandingsunits == "t", "tonnes", catcheslandingsunits), 
+    
+    # fishing pressure descriptions
+    fishingpressuredescription = gsub("fishing pressure: ","",fishingpressuredescription),
+    fishingpressuredescription = gsub(" in winter rings","", fishingpressuredescription),
+    fishingpressuredescription = ifelse(fishingpressuredescription == "select fishing pressure description", NA, fishingpressuredescription),
+    fage                       = ifelse(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription), 
+             str_extract(fishingpressuredescription, "[0-9]{1,2}-[0-9]{1,2}"), fage),
+    fishingpressuredescription = ifelse(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription), 
+             str_replace(fishingpressuredescription, "[0-9]{1,2}-[0-9]{1,2}", ""), fishingpressuredescription), 
+    fishingpressuredescription = gsub("\\(ages \\)|bar\\(\\)|mean |weighted ","", fishingpressuredescription),
+    fishingpressuredescription = gsub("harvest rate", "hr", fishingpressuredescription),
+    
+    # specific cases for cod 5a in 2016 and had 5a in 2018 (description is F; harvest rate in custom 2)
+    fishingpressuredescription = ifelse(stockkeylabel == "cod-iceg"   & assessmentyear == 2016, "f", fishingpressuredescription),
+    fishingpressuredescription = ifelse(stockkeylabel == "had.27.5a"  & assessmentyear == 2018, "f", fishingpressuredescription),
+    fishingpressuredescription = ifelse(is.na(fishingpressure) & !is.na(fishingpressuredescription), NA, fishingpressuredescription),
+    fishingpressuredescription = str_trim(fishingpressuredescription),
+      
+    # fishingpressureunits
+    fishingpressureunits       = ifelse(is.na(fishingpressure) & !is.na(fishingpressureunits), NA, fishingpressureunits)
   )
   
-
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 
 
-iAssess %>% distinct(unitofrecruitment) %>%  View()
-iAssess %>% distinct(stocksizeunits) %>%  View()
-iAssess %>% distinct(catcheslandingsunits) %>%  View()
-iAssess %>% distinct(fishingpressureunits) %>%  View()
-iAssess %>% filter(stockkeylabelold == "ang-ivvi") %>% View() 
+# iAssess %>% distinct(recruitmentdescription) %>%  View()
+# iAssess %>% distinct(unitofrecruitment) %>%  View()
+# iAssess %>% filter(is.na(unitofrecruitment) & !is.na(recruitment)) %>% View()
+# 
+# iAssess %>% distinct(stocksizedescription) %>%  arrange(stocksizedescription) %>% View()
+# iAssess %>% distinct(stocksizeunits) %>%  View()
+# iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
+# iAssess %>% filter(stocksizedescription == "biomass indices") %>% View()
+
+# iAssess %>% distinct(catcheslandingsunits) %>%  View()
+
+# iAssess %>% distinct(fishingpressuredescription)  %>% View()
+# iAssess %>% filter(is.na(fishingpressure) & !is.na(fishingpressuredescription)) %>% View()
+# iAssess %>% filter(grepl("fishing pressure", fishingpressuredescription)) %>% View()
+# iAssess %>% filter(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription)) %>% View()
+
+# iAssess %>% distinct(fishingpressureunits) %>%  View()
+
+# iAssess %>% filter(is.na(fishingpressureunits) & !is.na(fishingpressuredescription)) %>% View()
+# iAssess %>% 
+#   filter(is.na(fishingpressureunits) & !is.na(fishingpressuredescription)) %>% 
+#   distinct(stockkeylabel, assessmentyear, fishingpressuredescription, fishingpressureunits) %>% 
+#   arrange(fishingpressuredescription) %>% 
+#   View()
+
+# iAssess %>% 
+#   distinct(stockkey, stockkeylabelold, assessmentyear, purpose, stocksizedescription) %>% 
+#   group_by(stocksizedescription) %>% 
+#   summarize(n=n()) %>% 
+#   View()
+ 
+# iAssess %>% filter(stocksizeunits == "thousand tonnes") %>% View()
+# iAssess %>% filter(catcheslandingsunits == "t") %>% View()
+# iAssess %>% filter(stocksizeunits == "select units" & !is.na(stocksize)) %>% View()
+# iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
+# 
+# iAssess %>% filter(year == 2016, purpose == "replace") %>% View()
+
+# iAssess %>%
+#   filter(stocksizeunits == "tonnes") %>%
+#   # filter(stocksize > 1000000) %>% 
+#   # filter(stockkeylabelold == "san-nsea") %>% 
+#   ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
+#   theme_publication() +
+#   geom_line() +
+#   expand_limits(y=0) +
+#   scale_y_continuous(labels = scales::scientific_format(digits=2)) +
+#   facet_wrap(~stockkeylabel, scales="free_y")
+
+
+# -----------------------------------------------------------------------------------------
+# load Esther's data
+# -----------------------------------------------------------------------------------------
+
+esther <-
+  readxl::read_excel(
+    path= paste(advicedir, "/excel/Data_Esther.xlsx", sep=""), 
+    sheet     = "Data_Esther",
+    col_names = TRUE, 
+    col_types = "text", 
+    trim_ws   = FALSE) %>%
+  lowcase() %>% 
+  select(
+    stockkeylabelold = fishstock,
+    assessmentyear   = assyear,
+    assessmentmodel  = assmodel,
+    purpose          = asstype,
+    year,
+    stocksize        = ssb,
+    fishingpressure  = f,
+    recruitment,
+    fpa, flim, fmsy,
+    blim, bpa, msybtrigger,
+    overfishing, overfished
+  ) %>% 
   
-iAssess %>% 
-  distinct(stockkey, stockkeylabelold, assessmentyear, purpose, stocksizedescription) %>% 
-  group_by(stocksizedescription) %>% 
-  summarize(n=n()) %>% 
-  View()
+  # remove nephrops and rays for now
+  filter(tolower(substr(stockkeylabelold,1,3)) != "nep") %>% 
+  filter(tolower(substr(stockkeylabelold,1,3)) != "raj") %>% 
+  filter(tolower(substr(stockkeylabelold,1,2)) != "rj") %>% 
+  
+  # make numeric
+  mutate_at(c("assessmentyear","year", "recruitment","stocksize","fishingpressure",
+              "flim","fpa","fmsy","blim","bpa", "msybtrigger", "overfishing", "overfished"),   
+            funs(as.numeric)) %>% 
+  
+  # make lowercase
+  mutate_at(c("assessmentmodel", "purpose"), funs(tolower)) %>% 
+  
+  # distinct rows only
+  distinct() 
 
-iAssess %>% filter(stocksizeunits == "thousand tonnes") %>% View()
-iAssess %>% filter(catcheslandingsunits == "t") %>% View()
-iAssess %>% filter(stocksizeunits == "select units" & !is.na(stocksize)) %>% View()
-iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
 
-iAssess %>% filter(year == 2016, purpose == "replace") %>% View()
-
-iAssess %>%
-  filter(stocksizeunits == "tonnes") %>%
-  # filter(stocksize > 1000000) %>% 
-  # filter(stockkeylabelold == "san-nsea") %>% 
-  ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
-  theme_publication() +
-  geom_line() +
-  expand_limits(y=0) +
-  scale_y_continuous(labels = scales::scientific_format(digits=2)) +
-  facet_wrap(~stockkeylabel, scales="free_y")
 
 
