@@ -37,7 +37,7 @@
 # 26/11/2018 added comparison to the data used by Esther Schuch
 # -----------------------------------------------------------------------------------------------
 
-rm(list=ls())
+# rm(list=ls())
 
 library(tidyverse)     # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
 library(reshape2)      # reshaping data; e.g. dcast
@@ -59,7 +59,7 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 iAdvice <-
   readxl::read_excel(
-    path= paste(advicedir, "/Excel/ICES Scientific Advice database.xlsx", sep=""), 
+    path= paste(advicedir, "/Excel/ICES Scientific Advice database.xlsm", sep=""), 
     sheet     = "DATA",
     col_names = TRUE, 
     col_types = "text", 
@@ -81,13 +81,12 @@ iAdvice <-
   mutate_at(c("purpose", "speciescommonname", "stockkeylabel","stockkeylabelold","stockkeylabelnew",
               "stocksizeunits","fishingpressureunits"), 
             funs(tolower)) %>% 
-  mutate_at(c("published"), funs(as.logical))
+  mutate_at(c("benchmark", "published"), funs(as.logical))
   
 
 save(iAdvice, file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
+
 # glimpse(iAdvice)
-
-
 
 # ---------------------------------------------------------------------------------------
 # Read iSpecies from excel (not from ICES SAG because more information added to excel version). 
@@ -105,6 +104,8 @@ iSpecies <-
 
 save(iSpecies, file=paste(advicedir, "/rdata/iSpecies.RData",sep=""))
 
+# glimpse(iSpecies)
+
 # -----------------------------------------------------------------------------------------
 # Generate iRename, iStockkey
 # -----------------------------------------------------------------------------------------
@@ -114,8 +115,8 @@ iRename <-
   iAdvice %>% 
   group_by(stockkey, stockkeylabel) %>% 
   filter(row_number() ==1 ) %>% 
-  dplyr::select(stockkey, stockkeylabel, stocklongname) %>% 
-  mutate(speciesfaocode = substr(stockkeylabel,1,3)) 
+  ungroup() %>% 
+  dplyr::select(stockkeylabel, stockkey) 
 
 # iRename %>% filter(grepl("had.27", stockkeylabel)) %>% View()
 # iRename %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
@@ -124,12 +125,10 @@ iRename <-
 iStockkey <-
   iAdvice %>% 
   group_by(stockkey) %>% 
-  filter(!is.na(stocklongname)) %>% 
+  # filter(!is.na(stocklongname)) %>% 
   filter(assessmentyear == max(assessmentyear) ) %>% 
   ungroup() %>% 
-  dplyr::select(stockkey, stockkeylabelnew, stockkeylabelold, stockarea) %>% 
-  distinct()
-  # dplyr::select(stockkey, stockkeylabelnew, stockkeylabelold, stocklongname, speciescommonname, stockarea)
+  distinct(stockkey, stockkeylabelnew, stockkeylabelold, speciesfaocode) 
 
 # iStockkey %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
 
@@ -145,24 +144,12 @@ save(iStockkey, file=paste(advicedir, "/rdata/iStockkey.RData",sep=""))
 
 qcsexcel <-
   readxl::read_excel(
-    path= paste(advicedir, "/excel/QCS and EXCEL Assessment Database combined.xlsx", sep=""), 
+    path= paste(advicedir, "/excel/QCS and EXCEL Assessment Database combined.xlsm", sep=""), 
     sheet     = "data",
     col_names = TRUE, 
     col_types = "text", 
     trim_ws   = FALSE) %>%
   lowcase() %>% 
-  
-  mutate_at(c("assessmentyear","year", "recruitment","stocksize","fishingpressure", "catches"),   
-            funs(as.numeric)) %>% 
-  
-  mutate_at(c("stockkey"),    funs(as.integer)) %>% 
-  
-  mutate_at(c("unitofrecruitment", "recruitmentdescription", "stocksizedescription"),    funs(tolower)) %>% 
-  
-  mutate(recruitment       = ifelse(unitofrecruitment == "thousands", recruitment/1000, recruitment),
-         unitofrecruitment = ifelse(unitofrecruitment == "thousands", "millions", unitofrecruitment),
-         recruitment       = ifelse(unitofrecruitment == "billions", recruitment*1000, recruitment),
-         unitofrecruitment = ifelse(unitofrecruitment == "billions", "millions", unitofrecruitment) ) %>% 
   
   # remove nephrops and rays for now
   filter(tolower(substr(stockkeylabel,1,3)) != "nep") %>% 
@@ -179,7 +166,39 @@ qcsexcel <-
             funs(as.numeric)) %>% 
   
   # make integer
-  mutate_at(c("year", "assessmentyear", "recruitmentage"), funs(as.integer)) %>% 
+  mutate_at(c("stockkey", "assessmentyear", "year", "recruitmentage"),    funs(as.integer)) %>% 
+  
+  # make lowercase
+  mutate_at(c("recruitmentdescription", "unitofrecruitment",  
+              "stocksizedescription", "stocksizeunits", 
+              "catcheslandingsunits",
+              "fishingpressuredescription", "fishingpressureunits",
+              "purpose"),    funs(tolower)) %>% 
+
+
+  # distinct rows only
+  distinct() %>% 
+  
+  # now merge with iAdvice (partly) and select the relevant columns
+  left_join(dplyr::select(iAdvice, 
+                          stockkey, assessmentyear, assessmentdate, purpose, published, assessmentscale, speciesfaocode),
+            by=c("stockkey","assessmentyear","purpose")) %>% 
+  
+  # TEMPORARY
+  # filter(is.na(speciesfaocode)) %>%
+  # distinct(stockkey, stockkeylabel, stockkeylabelold, assessmentyear, purpose) %>% 
+  # write.csv(file="temp.csv")
+
+
+  # keep the values from iAdvice (if available)
+  mutate(
+    published       = ifelse(is.na(published.y), published.x, published.y),
+    
+    assessmentscale = ifelse(is.na(assessmentscale.y), assessmentscale.x, assessmentscale.y),
+    assessmentscale = tolower(assessmentscale), 
+    
+    assessmentdate  = ifelse(is.na(assessmentdate.y), assessmentdate.x, assessmentdate.y)
+  ) %>% 
   
   # make logical
   mutate_at(c("published"),  funs(as.logical)) %>% 
@@ -187,34 +206,20 @@ qcsexcel <-
   # make date
   mutate( assessmentdate = as.Date(as.numeric(assessmentdate), origin="1899-12-30")) %>% 
   
-  # make lowercase
-  mutate_at(c("purpose", "unitofrecruitment", "stocksizeunits", "catcheslandingsunits", 
-              "fishingpressureunits"), funs(tolower)) %>% 
-  
-  # distinct rows only
-  distinct() %>% 
-  
-  # now merge with iAdvice (partly) and select the relevant columns
-  left_join(dplyr::select(iAdvice, 
-                          stockkey, assessmentyear, purpose, published, assessmentscale),
-            by=c("stockkey","assessmentyear","purpose")) %>% 
-  
-  # keep the values from iAdvice (if available)
-  mutate(
-    published       = ifelse(is.na(published.y), published.x, published.y),
-    assessmentscale = ifelse(is.na(assessmentscale.y), assessmentscale.x, assessmentscale.y),
-    assessmentscale = tolower(assessmentscale)
-  )
+  # remove temp variables
+  dplyr::select(-published.x, -published.y, -assessmentscale.x, -assessmentscale.y, -assessmentdate.x, -assessmentdate.y)
 
   
-
-
 save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 
 # glimpse(qcsexcel)
 # unique(qcsexcel$assessmentdate)
 # qcsexcel %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
 # qcsexcel %>% filter(is.na(stockkey)) %>% View()
+# qcsexcel %>% filter(!is.na(assessmentdate.x) & !is.na(assessmentdate.y) & assessmentdate.x != assessmentdate.y) %>% View()
+# iAdvice %>% filter(stockkey == 169048) %>% View()
+# iAdvice %>% filter(is.na(speciesfaocode)) %>% View()
+
 
 # -----------------------------------------------------------------------------------------
 # load Stock Database 
@@ -282,11 +287,11 @@ sag <-
   filter(tolower(substr(stockkeylabel,1,3)) != "raj") %>% 
   filter(tolower(substr(stockkeylabel,1,2)) != "rj") %>% 
   
-  # remove all data prior to 2001
-  filter(assessmentyear >= 2001) %>% 
+  # remove all data prior to 2013
+  filter(assessmentyear >= 2013) %>% 
   
   # remove specific assessments
-  filter(!(stockkeylabel == "whb.27.1-91214" & assessmentyear == 2010)) %>%   # This one is double with the whb-comb assessment 
+  # filter(!(stockkeylabel == "whb.27.1-91214" & assessmentyear == 2010)) %>%   # This one is double with the whb-comb assessment 
 
   mutate(purpose = ifelse(purpose %in% c("initadvice"), "initial advice", purpose)) %>% 
   
@@ -314,12 +319,26 @@ sag <-
   
   # now merge with iAdvice (partly) and select the relevant columns
   left_join(dplyr::select(iAdvice, 
-                          stockkey, assessmentyear, purpose, assessmentscale),
-            by=c("stockkey","assessmentyear","purpose")) 
+                          stockkey, assessmentyear, assessmentdate, purpose, assessmentscale),
+            by=c("stockkey","assessmentyear","purpose")) %>% 
+  
+  # keep the values from SAG (if available)
+  mutate(
+    assessmentdate  = ifelse(is.na(assessmentdate.x), assessmentdate.y, assessmentdate.x)
+  ) %>% 
+  
+  # make logical
+  mutate_at(c("published"),  funs(as.logical)) %>% 
+  
+  # make date
+  mutate( assessmentdate = as.Date(as.numeric(assessmentdate), origin="1899-12-30")) %>% 
+  
+  # remove temp variables
+  dplyr::select(-assessmentdate.x, -assessmentdate.y)
+  
   
 
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
-
 
 
 # glimpse(sag)
@@ -476,9 +495,6 @@ iAssess <-
   bind_rows(t1, t2) %>% 
   left_join(t3, by=c("stockkey", "assessmentyear", "purpose")) %>% 
   
-  # add FAO code
-  mutate(speciesfaocode = substr(stockkeylabel, 1, 3)) %>% 
-  
   # descriptions and units to lowercase
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
               "stocksizeunits", "stocksizedescription",
@@ -550,6 +566,8 @@ iAssess <-
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 
 
+# iAssess %>% filter(is.na(speciesfaocode)) %>% distinct(stockkeylabel, assessmentyear) %>%  View()
+
 # iAssess %>% distinct(recruitmentdescription) %>%  View()
 # iAssess %>% distinct(unitofrecruitment) %>%  View()
 # iAssess %>% filter(is.na(unitofrecruitment) & !is.na(recruitment)) %>% View()
@@ -604,43 +622,43 @@ save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 # load Esther's data
 # -----------------------------------------------------------------------------------------
 
-esther <-
-  readxl::read_excel(
-    path= paste(advicedir, "/excel/Data_Esther.xlsx", sep=""), 
-    sheet     = "Data_Esther",
-    col_names = TRUE, 
-    col_types = "text", 
-    trim_ws   = FALSE) %>%
-  lowcase() %>% 
-  select(
-    stockkeylabelold = fishstock,
-    assessmentyear   = assyear,
-    assessmentmodel  = assmodel,
-    purpose          = asstype,
-    year,
-    stocksize        = ssb,
-    fishingpressure  = f,
-    recruitment,
-    fpa, flim, fmsy,
-    blim, bpa, msybtrigger,
-    overfishing, overfished
-  ) %>% 
+# esther <-
+#   readxl::read_excel(
+#     path= paste(advicedir, "/excel/Data_Esther.xlsx", sep=""), 
+#     sheet     = "Data_Esther",
+#     col_names = TRUE, 
+#     col_types = "text", 
+#     trim_ws   = FALSE) %>%
+#   lowcase() %>% 
+#   select(
+#     stockkeylabelold = fishstock,
+#     assessmentyear   = assyear,
+#     assessmentmodel  = assmodel,
+#     purpose          = asstype,
+#     year,
+#     stocksize        = ssb,
+#     fishingpressure  = f,
+#     recruitment,
+#     fpa, flim, fmsy,
+#     blim, bpa, msybtrigger,
+#     overfishing, overfished
+#   ) %>% 
   
-  # remove nephrops and rays for now
-  filter(tolower(substr(stockkeylabelold,1,3)) != "nep") %>% 
-  filter(tolower(substr(stockkeylabelold,1,3)) != "raj") %>% 
-  filter(tolower(substr(stockkeylabelold,1,2)) != "rj") %>% 
+# remove nephrops and rays for now
+# filter(tolower(substr(stockkeylabelold,1,3)) != "nep") %>% 
+# filter(tolower(substr(stockkeylabelold,1,3)) != "raj") %>% 
+# filter(tolower(substr(stockkeylabelold,1,2)) != "rj") %>% 
   
-  # make numeric
-  mutate_at(c("assessmentyear","year", "recruitment","stocksize","fishingpressure",
-              "flim","fpa","fmsy","blim","bpa", "msybtrigger", "overfishing", "overfished"),   
-            funs(as.numeric)) %>% 
+# make numeric
+# mutate_at(c("assessmentyear","year", "recruitment","stocksize","fishingpressure",
+#             "flim","fpa","fmsy","blim","bpa", "msybtrigger", "overfishing", "overfished"),   
+#           funs(as.numeric)) %>% 
   
-  # make lowercase
-  mutate_at(c("assessmentmodel", "purpose"), funs(tolower)) %>% 
-  
-  # distinct rows only
-  distinct() 
+# make lowercase
+# mutate_at(c("assessmentmodel", "purpose"), funs(tolower)) %>% 
+
+# distinct rows only
+# distinct() 
 
 
 

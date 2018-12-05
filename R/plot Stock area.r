@@ -51,28 +51,10 @@ load(file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
 
 stk <-
   iAdvice %>% 
-  distinct(fishstock = stockkeylabelold, stockkey, assessmentyear, stockarea) %>%
-
-  # make "area" into a long table
-  separate(stockarea, c(paste0("x",1:50)), sep = ";") %>%
-  gather(key=dummy, value=unit, -fishstock, -assessmentyear, -stockkey) %>%
-  drop_na() %>%
-  select(-dummy) %>%
-  mutate(species = stringr::str_sub(fishstock, 1, 3))
-
-# filter(stk, fishstock == "cod-347d", assessmentyear==2015) %>% View()
-# filter(istock, stockkeylabelold == "cod-347d", assessmentyear==2015) %>% View()
-# filter(stk, fishstock == "hom-nsea", assessmentyear==1987) %>% View()
-
-# ----------------------------------------------------------------------------------------------------------
-# filter the required stocks, combine with fao areas (in package iceshape) and generate plot
-# ----------------------------------------------------------------------------------------------------------
-
-stk %>%
   
-  filter(species == "mac") %>%
+  filter(speciesfaocode == "ple") %>%
   
-  # mutate(fishstock = substr(fishstock, 1, 8)) %>% 
+  filter(adviceonstock == "Y") %>% 
   
   # filter(fishstock %in% c("cod-iris","cod-7e-k", "cod-7f-g","cod-7f-h","cod-7e-h",
   #                         "cod-ech","cod-echw","cod-eche",
@@ -82,6 +64,15 @@ stk %>%
   filter(assessmentyear %in% 1985:2018) %>%
   
   # filter(!unit %in% c("27.1","27.2","27.14", "27.14.b","27.14.a")) %>%
+  
+  distinct(fishstock = stockkeylabelold, stockkey, assessmentyear, stockarea) %>%
+
+  # make "area" into a long table
+  separate(stockarea, c(paste0("x",1:50)), sep = ";") %>%
+  gather(key=dummy, value=unit, -fishstock, -assessmentyear, -stockkey) %>%
+  drop_na() %>%
+  select(-dummy) %>%
+  mutate(species = stringr::str_sub(fishstock, 1, 3)) %>% 
   
   # link to the link table to get name of geometry
   left_join(iceshape::faolink) %>%
@@ -94,9 +85,19 @@ stk %>%
   
   # join areas together by stock and assessmentyear
   group_by(fishstock, assessmentyear) %>%
-  summarise() %>%
+  summarise()
+  
 
-  # generate the plot
+# filter(stk, fishstock == "cod-347d", assessmentyear==2015) %>% View()
+# filter(istock, stockkeylabelold == "cod-347d", assessmentyear==2015) %>% View()
+# filter(stk, fishstock == "hom-nsea", assessmentyear==1987) %>% View()
+
+# ----------------------------------------------------------------------------------------------------------
+# generate plot
+# ----------------------------------------------------------------------------------------------------------
+
+stk %>%
+
   ggplot() +
   theme_publication() +
   theme(panel.spacing    = unit(0.1, "lines"),
@@ -109,8 +110,9 @@ stk %>%
   
   theme(legend.title=element_blank()) +
   geom_sf(data=world1, inherit.aes = FALSE, fill="gray90") +
-  geom_sf(aes(fill = factor(fishstock)), alpha=0.9) +
-  coord_sf(xlim = c(-20,15), ylim = c(35,64)) +
+  geom_sf(aes(fill = factor(fishstock)), alpha=0.6) +
+  coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
   ggmisc::scale_fill_crayola() +
   facet_wrap(~assessmentyear, ncol=10)
+  # facet_grid(fishstock~assessmentyear)
 

@@ -23,24 +23,30 @@ load(file=paste(advicedir,"/rdata/iAssess.RData", sep=""))
 # ---------------------------------------------------------------------------------------------
 # Historic retros: plot stock data over different assessment years 
 # ---------------------------------------------------------------------------------------------
-
 iAssess %>% 
   mutate(stockkeylabelold = ifelse(is.na(stockkeylabelold), stockkeylabel, stockkeylabelold)) %>% 
   mutate(decade = as.character(10*floor(assessmentyear/10))) %>% 
   
-  # filter(speciesfaocode == "ang") %>% 
-  # filter(substr(speciesfaocode,1,1) == "a") %>% 
-  # filter(stockkeylabelold == "ang-ivvi") %>% 
-  
-  filter(purpose == "advice") %>% 
-  filter(!is.na(stockkeylabelold)) %>%
-  filter(stocksizeunits == "tonnes") %>% 
+  filter(purpose              == "advice") %>%   # this ignores situations with "initial advice"
+  filter(stocksizeunits       == "tonnes") %>% 
   filter(stocksizedescription == "ssb") %>% 
-  filter(!is.na(stocksize)) %>% 
-  filter(year > 1980, year <= assessmentyear) %>% 
+  filter(!is.na(stockkeylabelold)) %>%
+  filter(!is.na(stocksize)) %>%
   
+  filter(!(stockkeylabelold %in% c("ghl-arct", "san-shet", "san-scow"))) %>% 
+  
+  filter(year > 1980, year <= assessmentyear, year >= assessmentyear - 15) %>% 
+  
+  group_by(stockkeylabelold) %>% 
+  mutate(n_assess      = n_distinct(assessmentyear)) %>% 
+  filter(n_assess >= 5) %>% 
+
+  arrange(stockkeylabel, assessmentyear, year) %>% 
   ungroup() %>% 
   data.frame() %>% 
+  
+  # filter(stockkeylabelold == "ple-echw") %>% 
+  
 
   ggplot(aes(year,stocksize, group=assessmentyear)) +
   theme_publication() +
@@ -54,12 +60,15 @@ iAssess %>%
         strip.text       = element_text(size=8, face="plain", hjust=0, margin = margin(0,0,0,0, "mm"))
         # legend.position = "null"
         ) +
+  
   geom_line(aes(colour = decade) ) +
+  
   expand_limits(y = 0) +
   # xlim(2005,2020) +
   labs(x = NULL, y = NULL , title = "SSB")  +
   # facet_wrap(~ assessmentyear, scales="free_y")
-  facet_wrap(~ stockkeylabelold, scales="free_y")
+  facet_wrap(~ stockkeylabelold, scales="free_y") 
+  # facet_wrap(~ stockkeylabelold+assessmentyear)
 
 
 
@@ -68,14 +77,23 @@ iAssess %>%
   mutate(stockkeylabelold = ifelse(is.na(stockkeylabelold), stockkeylabel, stockkeylabelold)) %>% 
   mutate(decade = as.character(10*floor(assessmentyear/10))) %>% 
   
-  filter(purpose == "advice") %>% 
-  filter(!is.na(stockkeylabelold)) %>%
+  filter(purpose                    == "advice") %>% 
+  filter(fishingpressuredescription %in% c("fishing pressure","f")) %>% 
   filter(fishingpressureunits %in% c("year-1","per year")) %>% 
-  # filter(speciesfaocode %in% c("cod","her","ple","sol","whb","hom","had","whg", "sai", "san") ) %>% 
+  filter(!is.na(stockkeylabelold)) %>%
   filter(!is.na(fishingpressure)) %>% 
-  # filter(assessmentscale != "relative") %>% 
+
+  filter(!(stockkeylabelold %in% c("ghl-arct", "san-shet", "san-scow"))) %>% 
   
-  filter(year > 1980, year <= assessmentyear) %>% 
+  filter(year > 1980, year <= assessmentyear, year >= assessmentyear - 15) %>% 
+  
+  group_by(stockkeylabelold) %>% 
+  mutate(n_assess      = n_distinct(assessmentyear)) %>% 
+  filter(n_assess >= 5) %>% 
+  
+  # filter(stockkeylabelold == "cod-iris") %>% 
+  
+  arrange(stockkeylabel, assessmentyear, year) %>% 
   ungroup() %>% 
   data.frame() %>% 
   
@@ -86,15 +104,18 @@ iAssess %>%
         axis.text.y  = element_blank(),
         axis.ticks.y = element_blank(),
         panel.spacing.x = unit(0.1, "mm"),
-        panel.spacing.y = unit(1, "mm")
-        # strip.background = element_blank(),
+        panel.spacing.y = unit(0.5, "mm"),
+        strip.background = element_blank(),
+        strip.text       = element_text(size=8, face="plain", hjust=0, margin = margin(0,0,0,0, "mm"))
         # legend.position = "null"
   ) +
   geom_line(aes(colour = decade) ) +
   expand_limits(y = 0) +
   # xlim(2005,2020) +
   labs(x = NULL, y = NULL , title = "Fishing mortality")  +
-  facet_wrap(~ stockkeylabelold, scales="free_y")
+  facet_wrap(~ stockkeylabelold, scales="free_y") 
+  # facet_wrap(~ stockkeylabelold+assessmentyear)
+  
 
 
 # And now for recruitment
