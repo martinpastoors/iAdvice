@@ -40,8 +40,10 @@ load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 stockdef <-
   iAssess %>%
   
-  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
-               stockkeylabelold)) %>%
+  # filter(grepl("had-34|had-n", stockkeylabelold)) %>%
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
+                stockkeylabelold)) %>%
+  # filter(adviceonstock) %>% 
   
   mutate(
     stock = NA,
@@ -52,11 +54,13 @@ stockdef <-
     stock = ifelse(grepl("whb-c|whb-n",stockkeylabelold)            , "whb (comb)",stock),
     stock = ifelse(grepl("sol-ns",stockkeylabelold)                 , "sol (north sea)",stock),
     stock = ifelse(grepl("hom-c|hom-w",stockkeylabelold)            , "hom (west)",stock),
-    stock = ifelse(grepl("had-3|had-n",stockkeylabelold)            , "had (north sea)",stock),
+    stock = ifelse(grepl("had-34|had-n",stockkeylabelold)            , "had (north sea)",stock),
     stock = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stock)
   ) %>% 
   
   filter(grepl("advice", purpose )) %>%
+  # filter(grepl("hke", stock), assessmentyear == 2018) %>% View()
+
   filter(stocksizeunits == "tonnes", unitofrecruitment == "thousands", fishingpressureunits %in% c("per year", "year-1")) %>% 
   
   select(assessmentyear, stock, stockkeylabelold) %>% 
@@ -74,4 +78,6 @@ stockdef %>%
   ggplot(aes(x=assessmentyear, y=stock)) +
   theme_publication() +
   geom_dumbbell(aes(xend = maxy, x=miny, group=stock)) +
-  geom_text(aes(x=miny, label=stockkeylabelold), hjust=0, nudge_y=0.15)
+  geom_text(aes(x=miny, label=stockkeylabelold), hjust=0, nudge_y=0.15, size=3)
+
+

@@ -100,6 +100,87 @@ d.benchmarks <-
   
   distinct(stockkeylabelold, assessmentyear, benchmark) 
 
+# Overview of purpose
+d.purpose <-
+  
+  iAssess %>% 
+  # filter(!(grepl("benchmark", purpose) & benchmark)) %>% 
+  filter(!(grepl("benchmark", purpose))) %>% 
+  filter(adviceonstock) %>% 
+  
+  mutate(purpose = tolower(purpose)) %>% 
+  
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
+               stockkeylabelold)) %>%
+  
+  mutate(
+    stockkeylabelold = ifelse(grepl("ple-n",stockkeylabelold)                  , "ple (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("her-4",stockkeylabelold)                  , "her (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("mac-67|mac-nea|mac-west",stockkeylabelold), "mac (west)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("cod-34|cod-nsea",stockkeylabelold)        , "cod (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("whb-c|whb-n",stockkeylabelold)            , "whb (comb)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("sol-ns",stockkeylabelold)                 , "sol (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("hom-c|hom-w",stockkeylabelold)            , "hom (west)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("had-3|had-n",stockkeylabelold)            , "had (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stockkeylabelold)
+  ) %>% 
+  
+  distinct(stockkeylabelold, assessmentyear, purpose) %>% 
+  arrange(stockkeylabelold, assessmentyear) 
+
+  # %>% 
+  # group_by(stockkeylabelold, assessmentyear) %>% 
+  # mutate(n = n()) %>% 
+  # filter(n >= 2) %>% 
+  # View()
+
+d.purpose %>% 
+  filter(assessmentyear >= 1980) %>% 
+  group_by(assessmentyear, purpose) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(x=assessmentyear, y=n, group=purpose)) +
+  theme_publication() +
+  # geom_line(aes(colour=factor(assessmentmodel))) +
+  geom_bar(aes(fill=factor(purpose)), stat="identity") + 
+  scale_y_continuous(breaks=pretty_breaks())
+
+# Overview of assessment models
+d.assessments <-
+  
+  iAdvice %>% 
+  filter(grepl("advice", purpose)) %>% 
+  mutate(assessmentmodel = tolower(assessmentmodel)) %>% 
+  
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
+               stockkeylabelold)) %>%
+
+  mutate(
+    stockkeylabelold = ifelse(grepl("ple-n",stockkeylabelold)                  , "ple (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("her-4",stockkeylabelold)                  , "her (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("mac-67|mac-nea|mac-west",stockkeylabelold), "mac (west)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("cod-34|cod-nsea",stockkeylabelold)        , "cod (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("whb-c|whb-n",stockkeylabelold)            , "whb (comb)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("sol-ns",stockkeylabelold)                 , "sol (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("hom-c|hom-w",stockkeylabelold)            , "hom (west)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("had-3|had-n",stockkeylabelold)            , "had (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stockkeylabelold)
+  ) %>% 
+  
+  distinct(stockkeylabelold, assessmentyear, assessmentmodel, ncpueseries, nsurveyseries) %>% 
+  arrange(stockkeylabelold, assessmentyear)
+
+d.assessments %>% 
+  filter(assessmentyear >= 1980) %>% 
+  group_by(assessmentyear, assessmentmodel) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(x=assessmentyear, y=n, group=assessmentmodel)) +
+  theme_publication() +
+  # geom_line(aes(colour=factor(assessmentmodel))) +
+  geom_bar(aes(fill=factor(assessmentmodel)), stat="identity") + 
+  scale_y_continuous(breaks=pretty_breaks())
+
+d.assessments %>% filter(is.na(assessmentmodel)) %>% View()
+
 d.pairs <-
   d %>% 
   distinct(stockkeylabelold, assessmentyear, variable) %>% 

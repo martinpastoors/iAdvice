@@ -125,9 +125,10 @@ d.metricinpeels <-
          rho = mean(rho_) )
 
 # create segments for retro plot (cod only)
+
 d.segment <-
   d.merged %>% 
-  filter(grepl("cod", stockkeylabelold)) %>%
+  filter(grepl("hke", stockkeylabelold)) %>%
   filter(variable == "stocksize") %>%
   filter( (peel==0 & year >= max(year-10)) | (peel != 0 & year == max(year)) ) %>% 
   
@@ -140,7 +141,7 @@ d.segment <-
 # plot of the retrospective patterns (cod only)
 d.merged %>%
   
-  filter(grepl("cod", stockkeylabelold)) %>%
+  filter(grepl("hke", stockkeylabelold)) %>%
   filter(variable == "stocksize") %>%
   filter(year >= assessmentyearbase - 10) %>% 
   
@@ -152,7 +153,7 @@ d.merged %>%
   geom_segment(data=d.segment, 
                aes(x=year, xend=year,y=value,yend=base), colour="gray", linetype="dashed", size=0.5) +
   geom_line(aes(colour=factor(peel), size=factor(peel))) +
-  geom_point(data=filter(d.merged, (peel != 0 & year == max(year)) & grepl("cod", stockkeylabelold) & variable=="stocksize")) +
+  geom_point(data=filter(d.merged, (peel != 0 & year == max(year)) & grepl("hke", stockkeylabelold) & variable=="stocksize")) +
   scale_colour_manual(breaks = c("0", "1", "2", "3", "4","5"), values=c("red", rep("black", 5))) +
   scale_size_manual (breaks = c("0", "1", "2", "3", "4","5"), values=c(1, rep(0.5, 5))) +
   expand_limits(y=0) +

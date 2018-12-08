@@ -372,3 +372,81 @@ sag %>%
   theme_publication() +
   geom_bar(aes(fill=published), stat="identity")
 
+# -----------------------------------------------------------------------------------------
+# compare assessments in iAdvice and iAssess
+# -----------------------------------------------------------------------------------------
+
+d.assess <-
+  iAssess %>% 
+  mutate(purpose = tolower(purpose)) %>% 
+  
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
+               stockkeylabelold)) %>%
+  
+  distinct(speciesfaocode, stockkeylabelold, assessmentyear, purpose) %>% 
+  arrange(speciesfaocode, assessmentyear, stockkeylabelold) %>% 
+  mutate(db_assess = TRUE)
+
+d.advice <-
+  iAdvice %>% 
+  mutate(purpose = tolower(purpose)) %>% 
+  filter(adviceonstock) %>% 
+  
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
+               stockkeylabelold)) %>%
+  
+  distinct(speciesfaocode, stockkeylabelold, assessmentyear, purpose) %>% 
+  arrange(speciesfaocode, assessmentyear, stockkeylabelold) %>% 
+  mutate(db_advice = TRUE)
+
+# write.csv(d.assess, file="assess.csv", row.names=FALSE)
+# write.csv(d.advice, file="advice.csv", row.names=FALSE)
+
+merged <-
+  d.advice %>% 
+  left_join(d.assess, by=c("speciesfaocode", "stockkeylabelold","assessmentyear", "purpose")) 
+
+# write.csv(merged, file="merged.csv", row.names=FALSE)
+
+# plot of mackerel stock definitions
+iAdvice %>% 
+  mutate(purpose = tolower(purpose)) %>% 
+  filter(grepl("mac-67|mac-nea|mac-west", stockkeylabelold)) %>%
+  filter(adviceonstock) %>% 
+  distinct(speciesfaocode, stockkeylabelold, assessmentyear, purpose) %>% 
+  arrange(speciesfaocode, assessmentyear, stockkeylabelold) %>% 
+  mutate(stockkeylabelold = factor(stockkeylabelold),
+         stockkeylabelold = factor(stockkeylabelold, levels=rev(levels(stockkeylabelold)))) %>% 
+  group_by(stockkeylabelold) %>% 
+  mutate(miny = min(assessmentyear),
+            maxy = max(assessmentyear)) %>% 
+
+  
+  ggplot(aes(x=assessmentyear, y=stockkeylabelold)) +
+  theme_publication() +
+  geom_point() +
+  geom_dumbbell(aes(xend = maxy, x=miny, group=stockkeylabelold)) +
+  geom_text(aes(x=miny, label=stockkeylabelold), hjust=0, nudge_y=0.15)
+
+
+# plot of norway pout stocks
+iAdvice %>% 
+  mutate(purpose = tolower(purpose)) %>% 
+  filter(grepl("nop", stockkeylabelold)) %>%
+  distinct(speciesfaocode, stockkeylabelold, assessmentyear, purpose) %>% 
+  arrange(speciesfaocode, assessmentyear, stockkeylabelold) %>% 
+  mutate(stockkeylabelold = factor(stockkeylabelold),
+         stockkeylabelold = factor(stockkeylabelold, levels=rev(levels(stockkeylabelold)))) %>% 
+  group_by(stockkeylabelold) %>% 
+  mutate(miny = min(assessmentyear),
+         maxy = max(assessmentyear)) %>% 
+  
+  
+  ggplot(aes(x=assessmentyear, y=stockkeylabelold)) +
+  theme_publication() +
+  geom_jitter(aes(colour=purpose), position=position_dodge(width=0.8)) +
+  geom_dumbbell(aes(xend = maxy, x=miny, group=stockkeylabelold)) +
+  geom_text(aes(x=miny, label=stockkeylabelold), hjust=0, nudge_y=0.15)
+
+
+

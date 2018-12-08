@@ -81,9 +81,14 @@ iAdvice <-
   mutate_at(c("purpose", "speciescommonname", "stockkeylabel","stockkeylabelold","stockkeylabelnew",
               "stocksizeunits","fishingpressureunits"), 
             funs(tolower)) %>% 
-  mutate_at(c("benchmark", "published"), funs(as.logical))
+  mutate_at(c("benchmark", "published"), funs(as.logical)) %>% 
   
-
+  mutate(
+    adviceonstock = ifelse(toupper(adviceonstock) == "Y", TRUE, adviceonstock),
+    adviceonstock = ifelse(toupper(adviceonstock) == "N", FALSE, adviceonstock),
+    adviceonstock = as.logical(adviceonstock)
+  )
+  
 save(iAdvice, file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
 
 # glimpse(iAdvice)
@@ -179,36 +184,11 @@ qcsexcel <-
   # distinct rows only
   distinct() %>% 
   
-  # now merge with iAdvice (partly) and select the relevant columns
-  left_join(dplyr::select(iAdvice, 
-                          stockkey, assessmentyear, assessmentdate, purpose, published, assessmentscale, speciesfaocode),
-            by=c("stockkey","assessmentyear","purpose")) %>% 
-  
-  # TEMPORARY
-  # filter(is.na(speciesfaocode)) %>%
-  # distinct(stockkey, stockkeylabel, stockkeylabelold, assessmentyear, purpose) %>% 
-  # write.csv(file="temp.csv")
-
-
-  # keep the values from iAdvice (if available)
-  mutate(
-    published       = ifelse(is.na(published.y), published.x, published.y),
-    
-    assessmentscale = ifelse(is.na(assessmentscale.y), assessmentscale.x, assessmentscale.y),
-    assessmentscale = tolower(assessmentscale), 
-    
-    assessmentdate  = ifelse(is.na(assessmentdate.y), assessmentdate.x, assessmentdate.y)
-  ) %>% 
+  # remove date
+  select(-assessmentdate)  %>% 
   
   # make logical
-  mutate_at(c("published"),  funs(as.logical)) %>% 
-  
-  # make date
-  mutate( assessmentdate = as.Date(as.numeric(assessmentdate), origin="1899-12-30")) %>% 
-  
-  # remove temp variables
-  dplyr::select(-published.x, -published.y, -assessmentscale.x, -assessmentscale.y, -assessmentdate.x, -assessmentdate.y)
-
+  mutate_at(c("published"),  funs(as.logical)) 
   
 save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 
@@ -296,15 +276,12 @@ sag <-
   mutate(purpose = ifelse(purpose %in% c("initadvice"), "initial advice", purpose)) %>% 
   
   # Deal with Norway pout stockkeylabels and initial advice
-  mutate(assessmentdate    = as.Date(NA)) %>% 
-  mutate(assessmentdatestr = ifelse(stockkeylabel=="nop-34-oct",paste(as.character(assessmentyear), "1030",sep=""), NA)) %>%
-  mutate(assessmentdatestr = ifelse(stockkeylabel=="nop-34-june",paste(as.character(assessmentyear), "0630",sep=""), assessmentdatestr)) %>%
-  
   mutate(purpose           = ifelse(grepl("nop-34-jun", stockkeylabel), "initial advice", purpose)) %>% 
-  mutate(stockkeylabel     = ifelse(grepl("nop-34", stockkeylabel), "nop-34", stockkeylabel)) %>% 
-  mutate(assessmentdate    = ymd(assessmentdatestr)) %>%
-  dplyr::select(-assessmentdatestr) %>% 
+  mutate(stockkeylabel     = ifelse(grepl("nop-34-jun", stockkeylabel), "nop-34", stockkeylabel)) %>% 
   
+  mutate(purpose           = ifelse(grepl("nop-34-oct", stockkeylabel), "advice", purpose)) %>% 
+  mutate(stockkeylabel     = ifelse(grepl("nop-34-oct", stockkeylabel), "nop-34", stockkeylabel)) %>% 
+
   # group_by(stockkey, stockkeylabel, assessmentyear, purpose, published, year) %>% 
   # filter(row_number() == 1) %>% 
   ungroup() %>% 
@@ -313,31 +290,13 @@ sag <-
   distinct() %>% 
   
   # now do the stockkey transformations
-  dplyr::select(-stockkey) %>% 
+  dplyr::select(-stockkey, -icesareas) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   left_join(iStockkey, by="stockkey") %>% 
   
-  # now merge with iAdvice (partly) and select the relevant columns
-  left_join(dplyr::select(iAdvice, 
-                          stockkey, assessmentyear, assessmentdate, purpose, assessmentscale),
-            by=c("stockkey","assessmentyear","purpose")) %>% 
-  
-  # keep the values from SAG (if available)
-  mutate(
-    assessmentdate  = ifelse(is.na(assessmentdate.x), assessmentdate.y, assessmentdate.x)
-  ) %>% 
-  
   # make logical
-  mutate_at(c("published"),  funs(as.logical)) %>% 
+  mutate_at(c("published"),  funs(as.logical)) 
   
-  # make date
-  mutate( assessmentdate = as.Date(as.numeric(assessmentdate), origin="1899-12-30")) %>% 
-  
-  # remove temp variables
-  dplyr::select(-assessmentdate.x, -assessmentdate.y)
-  
-  
-
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 
 
@@ -347,40 +306,6 @@ save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 # sag %>% distinct(purpose, published) %>% View()
 # sort(unique(sag$stockkeylabel))
 
-# t1 <- sag %>% filter(is.na(stockkey)) %>% distinct(stockkeylabel)
-# 
-# t2 <-
-#   sd %>% 
-#   filter(stockkeylabel %in% t1$stockkeylabel)
-# 
-# sag %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
-# 
-# iRename %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
-
-# get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
-#   filter(purpose=="Unofficial") %>% 
-#   distinct(stockkey, stockkeylabel, assessmentyear, published) %>% 
-#   arrange(assessmentyear, stockkey, stockkeylabel, published) %>% 
-#   View()
-# 
-# get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181112.RData",sep=""))) %>% 
-#   filter(stockkey=="136708", assessmentyear == "2016") %>% 
-#   arrange(stockkey, stockkeylabel, assessmentyear, published) %>% 
-#   View()
-
-# sag %>% filter(grepl("jun", stockkeylabel)) %>% View()
-# sag %>% filter(purpose == "alternative") %>% View()
-# sag %>% filter(is.na(purpose)) %>% View()
-
-# 
-# sag %>% 
-#   filter(purpose == "initadvice")  %>%
-#   distinct(stockkey, stockkeylabel, assessmentyear, assessmentdate) %>%
-#   View()
-# 
-# sag %>% 
-#   filter(stockkeylabel == "had.27.46a20", assessmentyear == 2018) %>% 
-#   View()
 
 # -----------------------------------------------------------------------------------------
 # load SAG reference points (see: DownloadDataFromSAG.r)
@@ -428,17 +353,12 @@ save(sagrefpoints, file=paste(advicedir, "/rdata/iSAGrefpoints.RData",sep=""))
 
 sag_unique <-
   sag %>% 
-  
-  # distinct(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
-
-  distinct(stockkey, stockkeylabel, assessmentyear, purpose, published) %>% 
-  filter(published) %>% 
-  dplyr::select(-published) %>% 
+  distinct(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose) %>% 
   ungroup()
 
 qcsexcel_unique <-
   qcsexcel %>% 
-  distinct(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
+  distinct(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose) %>% 
   ungroup()
 
 # filter(sag_, grepl("ang-kask", stockkeylabel)) %>% View()
@@ -474,26 +394,30 @@ only_in_sag <-
 # sag
 t1 <-
   bind_rows(incommon, only_in_sag) %>% 
-  left_join(sag, by=c("stockkey","stockkeylabel", "assessmentyear", "purpose")) %>% 
+  left_join(sag, by=c("stockkey","stockkeylabel", "stockkeylabelold", "stockkeylabelnew", "assessmentyear", "purpose")) %>% 
   mutate(source = "sag")
 
 # qcs
 t2 <-
   only_in_qcsexcel %>% 
-  left_join(qcsexcel, by=c("stockkey","stockkeylabel", "assessmentyear","purpose")) %>% 
+  left_join(qcsexcel, by=c("stockkey","stockkeylabel", "stockkeylabelold", "stockkeylabelnew", "assessmentyear","purpose")) %>% 
   dplyr::select(one_of(names(t1))) %>% 
   mutate(source = tolower(source))
 
 # iAdvice (only model specifications)
 t3 <-
   iAdvice %>% 
-  dplyr::select(stockkey, assessmentyear, purpose, assessmentmodel) %>% 
+  dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose, 
+                stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, adviceonstock, published) %>% 
   mutate_at(c("assessmentmodel"), funs(tolower))
+glimpse(t1)
+glimpse(t2)
 
 # generate iAssess
 iAssess <-
   bind_rows(t1, t2) %>% 
-  left_join(t3, by=c("stockkey", "assessmentyear", "purpose")) %>% 
+  full_join(t3, by=c("stockkey", "stockkeylabel", "stockkeylabelold", 
+                     "stockkeylabelnew", "assessmentyear","purpose")) %>% 
   
   # descriptions and units to lowercase
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
@@ -560,9 +484,15 @@ iAssess <-
     fishingpressuredescription = str_trim(fishingpressuredescription),
       
     # fishingpressureunits
-    fishingpressureunits       = ifelse(is.na(fishingpressure) & !is.na(fishingpressureunits), NA, fishingpressureunits)
-  )
+    fishingpressureunits       = ifelse(is.na(fishingpressure) & !is.na(fishingpressureunits), NA, fishingpressureunits),
+    fishingpressureunits       = ifelse(is.na(fishingpressureunits) & fishingpressuredescription == "f", "year-1",fishingpressureunits),
+    fishingpressureunits       = ifelse(fishingpressureunits == "per year", "year-1", fishingpressureunits)
+  ) %>% 
   
+  # Handle published and assessmentscale
+  mutate(published = ifelse(is.na(published.x), published.y, published.x)) %>% 
+  select(-published.x, -published.y)
+
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 
 
@@ -577,7 +507,24 @@ save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 # iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
 # iAssess %>% filter(stocksizedescription == "biomass indices") %>% View()
 
+# iAssess %>% filter(fishingpressureunits == "harvest rate") %>% View()
+iAssess %>% filter(fishingpressuredescription == "fproxy") %>% View()
+iAssess %>% distinct(fishingpressuredescription, fishingpressureunits, source) %>% arrange(fishingpressuredescription) %>% View()
+iAssess %>% 
+  filter(grepl("harvest rate|hr", fishingpressuredescription) | 
+         grepl("harvest rate|hr", fishingpressuredescription)) %>% 
+  distinct(fishingpressuredescription, fishingpressureunits, source) %>% 
+  View()
+
+iAssess %>% 
+  filter(grepl("relative hr", fishingpressuredescription) ) %>% 
+  distinct(fishingpressuredescription, fishingpressureunits, source, stockkeylabel, assessmentyear) %>% 
+  View()
+
 # iAssess %>% distinct(catcheslandingsunits) %>%  View()
+
+# iAssess %>% filter(stockkeylabelold == "mac-west", assessmentyear == 1995) %>% View()
+
 
 # iAssess %>% distinct(fishingpressuredescription)  %>% View()
 # iAssess %>% filter(is.na(fishingpressure) & !is.na(fishingpressuredescription)) %>% View()
@@ -661,5 +608,8 @@ save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 # distinct() 
 
 
+iAssess %>% 
+  filter(fishingpressuredescription == "f" & is.na(fishingpressureunits)) %>% 
+  View()
 
 
