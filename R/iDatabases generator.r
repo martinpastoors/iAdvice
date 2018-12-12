@@ -192,6 +192,14 @@ qcsexcel <-
   
 save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 
+# qcsexcel %>% 
+#   filter(grepl("cod-347d", stockkeylabelold)) %>% 
+#   filter(year >= 2000) %>% 
+#   select(stockkeylabelold, assessmentyear, year, stocksize) %>% 
+#   spread(key=year, value=stocksize) %>% 
+#   arrange(desc(assessmentyear)) %>% 
+#   View()
+
 # glimpse(qcsexcel)
 # unique(qcsexcel$assessmentdate)
 # qcsexcel %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
@@ -306,6 +314,14 @@ save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 # sag %>% distinct(purpose, published) %>% View()
 # sort(unique(sag$stockkeylabel))
 
+# sag %>%
+#   filter(grepl("cod-347d", stockkeylabelold)) %>%
+#   filter(year >= 2010) %>%
+#   filter(purpose=="advice") %>% 
+#   select(stockkeylabelold, assessmentyear, year, stocksize) %>%
+#   spread(key=year, value=stocksize) %>%
+#   arrange(desc(assessmentyear)) %>%
+#   View()
 
 # -----------------------------------------------------------------------------------------
 # load SAG reference points (see: DownloadDataFromSAG.r)
@@ -410,14 +426,19 @@ t3 <-
   dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose, 
                 stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, adviceonstock, published) %>% 
   mutate_at(c("assessmentmodel"), funs(tolower))
-glimpse(t1)
-glimpse(t2)
+
 
 # generate iAssess
 iAssess <-
+  
   bind_rows(t1, t2) %>% 
   full_join(t3, by=c("stockkey", "stockkeylabel", "stockkeylabelold", 
                      "stockkeylabelnew", "assessmentyear","purpose")) %>% 
+  
+  # group_by(stockkeylabelold, assessmentyear, purpose) %>% 
+  
+  # Exclude prediction years
+  # filter(year <= max(assessmentyear, na.rm=TRUE)) %>% 
   
   # descriptions and units to lowercase
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
@@ -495,6 +516,14 @@ iAssess <-
 
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 
+# iAssess %>%
+#   filter(grepl("cod-347d", stockkeylabelold)) %>%
+#   filter(year >= 2010) %>%
+#   filter(purpose=="advice") %>%
+#   select(stockkeylabelold, assessmentyear, year, stocksize) %>%
+#   spread(key=year, value=stocksize) %>%
+#   arrange(desc(assessmentyear)) %>%
+#   View()
 
 # iAssess %>% filter(is.na(speciesfaocode)) %>% distinct(stockkeylabel, assessmentyear) %>%  View()
 
@@ -508,22 +537,22 @@ save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 # iAssess %>% filter(stocksizedescription == "biomass indices") %>% View()
 
 # iAssess %>% filter(fishingpressureunits == "harvest rate") %>% View()
-iAssess %>% filter(fishingpressuredescription == "fproxy") %>% View()
-iAssess %>% distinct(fishingpressuredescription, fishingpressureunits, source) %>% arrange(fishingpressuredescription) %>% View()
-iAssess %>% 
-  filter(grepl("harvest rate|hr", fishingpressuredescription) | 
-         grepl("harvest rate|hr", fishingpressuredescription)) %>% 
-  distinct(fishingpressuredescription, fishingpressureunits, source) %>% 
-  View()
+# iAssess %>% filter(fishingpressuredescription == "fproxy") %>% View()
+# iAssess %>% distinct(fishingpressuredescription, fishingpressureunits, source) %>% arrange(fishingpressuredescription) %>% View()
+# iAssess %>% 
+#   filter(grepl("harvest rate|hr", fishingpressuredescription) | 
+#          grepl("harvest rate|hr", fishingpressuredescription)) %>% 
+#   distinct(fishingpressuredescription, fishingpressureunits, source) %>% 
+#   View()
 
-iAssess %>% 
-  filter(grepl("relative hr", fishingpressuredescription) ) %>% 
-  distinct(fishingpressuredescription, fishingpressureunits, source, stockkeylabel, assessmentyear) %>% 
-  View()
+# iAssess %>% 
+#   filter(grepl("relative hr", fishingpressuredescription) ) %>% 
+#   distinct(fishingpressuredescription, fishingpressureunits, source, stockkeylabel, assessmentyear) %>% 
+#   View()
 
 # iAssess %>% distinct(catcheslandingsunits) %>%  View()
 
-# iAssess %>% filter(stockkeylabelold == "mac-west", assessmentyear == 1995) %>% View()
+# iAssess %>% filter(stockkeylabelold == "hke-nrtn", assessmentyear == 2000) %>% View()
 
 
 # iAssess %>% distinct(fishingpressuredescription)  %>% View()
@@ -608,8 +637,8 @@ iAssess %>%
 # distinct() 
 
 
-iAssess %>% 
-  filter(fishingpressuredescription == "f" & is.na(fishingpressureunits)) %>% 
-  View()
+# iAssess %>% 
+#   filter(fishingpressuredescription == "f" & is.na(fishingpressureunits)) %>% 
+#   View()
 
 

@@ -27,22 +27,16 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
-
-# ---------------------------------------------------------------------------------------------
-# Scale differences: calculate average value for all the years in common. Calculate the number of jumps, 
-# defined as a relative difference of more than xx%
-# ---------------------------------------------------------------------------------------------
-
-removelastyears <- 0
-numberofyears   <- 8
-
-d <-
-  iAssess %>%
+d.stockdefinions <-
   
-  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
+  iAdvice %>% 
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
                stockkeylabelold)) %>%
+  filter(adviceonstock) %>% 
   
   mutate(
+    stockkeylabelold2 = stockkeylabelold, 
+    
     stockkeylabelold = ifelse(grepl("ple-n",stockkeylabelold)                  , "ple (north sea)",stockkeylabelold),
     stockkeylabelold = ifelse(grepl("her-4",stockkeylabelold)                  , "her (north sea)",stockkeylabelold),
     stockkeylabelold = ifelse(grepl("mac-67|mac-nea|mac-west",stockkeylabelold), "mac (west)",stockkeylabelold),
@@ -50,37 +44,30 @@ d <-
     stockkeylabelold = ifelse(grepl("whb-c|whb-n",stockkeylabelold)            , "whb (comb)",stockkeylabelold),
     stockkeylabelold = ifelse(grepl("sol-ns",stockkeylabelold)                 , "sol (north sea)",stockkeylabelold),
     stockkeylabelold = ifelse(grepl("hom-c|hom-w",stockkeylabelold)            , "hom (west)",stockkeylabelold),
-    stockkeylabelold = ifelse(grepl("had-3|had-n",stockkeylabelold)            , "had (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("had-34|had-n",stockkeylabelold)            , "had (north sea)",stockkeylabelold),
     stockkeylabelold = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stockkeylabelold)
   ) %>% 
   
-  # filter(grepl("ple", stockkeylabelold)) %>%
-  # filter(assessmentyear %in% c(2014,2015,2017,2018)) %>%
-  # filter(grepl("cod", stockkeylabelold)) %>% 
-  
-  filter(grepl("advice", purpose )) %>%
-  filter(stocksizeunits == "tonnes", unitofrecruitment == "thousands", fishingpressureunits %in% c("per year", "year-1")) %>% 
-  
-  select(assessmentyear, year, stockkeylabelold, stocksize, recruitment, fishingpressure) %>% 
-  distinct() %>% 
-  gather(key=variable, value=value, stocksize:fishingpressure) %>% 
-  filter(!is.na(value)) %>% 
-  
-  # at least 5 years needed for comparison
-  group_by(stockkeylabelold, assessmentyear, variable) %>%
-  mutate(nyears = n_distinct(year)) %>% 
-  filter(nyears >= 5) %>% 
-  select(-nyears) 
-  
+  distinct(stockkeylabelold, stockkeylabelold2, assessmentyear) %>%
+  group_by(stockkeylabelold) %>% 
+  arrange(stockkeylabelold, assessmentyear) %>% 
+  mutate(stockkeychange = ifelse(stockkeylabelold2 != lag(stockkeylabelold2), 1, 0),
+         stockkeychange = ifelse(is.na(lag(stockkeylabelold2)), NA, stockkeychange)) 
+
+d.stockdefinitionschange <-
+  d.stockdefinions %>% 
+  filter(stockkeychange == 1) %>% 
+  distinct(stockkeylabelold, assessmentyear)
+
 
 d.benchmarks <-
   
   iAdvice %>% 
   filter(benchmark) %>% 
-  select(stockkey, assessmentyear, benchmark) %>% 
-  right_join(iAssess, by=c("stockkey", "assessmentyear")) %>% 
+  select(stockkey, assessmentyear, benchmark, purpose) %>% 
+  right_join(iAssess, by=c("stockkey", "assessmentyear","benchmark","purpose")) %>% 
   mutate(benchmark = ifelse(is.na(benchmark), FALSE, benchmark)) %>% 
-
+  
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
                stockkeylabelold)) %>%
   
@@ -128,11 +115,11 @@ d.purpose <-
   distinct(stockkeylabelold, assessmentyear, purpose) %>% 
   arrange(stockkeylabelold, assessmentyear) 
 
-  # %>% 
-  # group_by(stockkeylabelold, assessmentyear) %>% 
-  # mutate(n = n()) %>% 
-  # filter(n >= 2) %>% 
-  # View()
+# %>% 
+# group_by(stockkeylabelold, assessmentyear) %>% 
+# mutate(n = n()) %>% 
+# filter(n >= 2) %>% 
+# View()
 
 d.purpose %>% 
   filter(assessmentyear >= 1980) %>% 
@@ -153,7 +140,7 @@ d.assessments <-
   
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
                stockkeylabelold)) %>%
-
+  
   mutate(
     stockkeylabelold = ifelse(grepl("ple-n",stockkeylabelold)                  , "ple (north sea)",stockkeylabelold),
     stockkeylabelold = ifelse(grepl("her-4",stockkeylabelold)                  , "her (north sea)",stockkeylabelold),
@@ -166,8 +153,18 @@ d.assessments <-
     stockkeylabelold = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stockkeylabelold)
   ) %>% 
   
-  distinct(stockkeylabelold, assessmentyear, assessmentmodel, ncpueseries, nsurveyseries) %>% 
-  arrange(stockkeylabelold, assessmentyear)
+  distinct(stockkeylabelold, assessmentyear, assessmentmodel, ncpueseries, nsurveyseries) %>%
+  group_by(stockkeylabelold) %>% 
+  arrange(stockkeylabelold, assessmentyear) %>% 
+  mutate(assessmentmodelchange = ifelse(assessmentmodel != lag(assessmentmodel), 1, 0),
+         assessmentmodelchange = ifelse(is.na(lag(assessmentmodel)), NA, assessmentmodelchange))
+  
+# Overview of assessment models changes
+d.assessmentmodelchange <-
+  
+  d.assessments %>% 
+  filter(assessmentmodelchange == 1) %>% 
+  distinct(stockkeylabelold, assessmentyear, assessmentmodel, .keep_all = FALSE)
 
 d.assessments %>% 
   filter(assessmentyear >= 1980) %>% 
@@ -179,8 +176,53 @@ d.assessments %>%
   geom_bar(aes(fill=factor(assessmentmodel)), stat="identity") + 
   scale_y_continuous(breaks=pretty_breaks())
 
-d.assessments %>% filter(is.na(assessmentmodel)) %>% View()
 
+
+# ---------------------------------------------------------------------------------------------
+# Scale differences: calculate average value for all the years in common. Calculate the number of jumps, 
+# defined as a relative difference of more than xx%
+# ---------------------------------------------------------------------------------------------
+
+removelastyears <- 0
+numberofyears   <- 10
+
+d <-
+  iAssess %>%
+  
+  filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
+               stockkeylabelold)) %>%
+  
+  mutate(
+    stockkeylabelold = ifelse(grepl("ple-n",stockkeylabelold)                  , "ple (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("her-4",stockkeylabelold)                  , "her (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("mac-67|mac-nea|mac-west",stockkeylabelold), "mac (west)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("cod-34|cod-nsea",stockkeylabelold)        , "cod (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("whb-c|whb-n",stockkeylabelold)            , "whb (comb)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("sol-ns",stockkeylabelold)                 , "sol (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("hom-c|hom-w",stockkeylabelold)            , "hom (west)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("had-3|had-n",stockkeylabelold)            , "had (north sea)",stockkeylabelold),
+    stockkeylabelold = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stockkeylabelold)
+  ) %>% 
+  
+  # filter(grepl("ple", stockkeylabelold)) %>%
+  # filter(assessmentyear %in% c(2014,2015,2017,2018)) %>%
+  # filter(grepl("cod", stockkeylabelold)) %>% 
+  
+  filter(grepl("advice", purpose )) %>%
+  filter(stocksizeunits == "tonnes", unitofrecruitment == "thousands", fishingpressureunits %in% c("per year", "year-1")) %>% 
+  
+  select(assessmentyear, year, stockkeylabelold, stocksize, recruitment, fishingpressure) %>% 
+  distinct() %>% 
+  gather(key=variable, value=value, stocksize:fishingpressure) %>% 
+  filter(!is.na(value)) %>% 
+  
+  # at least 5 years needed for comparison
+  group_by(stockkeylabelold, assessmentyear, variable) %>%
+  mutate(nyears = n_distinct(year)) %>% 
+  filter(nyears >= 5) %>% 
+  select(-nyears) 
+
+# Create a set of assessment pairs: two subsequent assessments  
 d.pairs <-
   d %>% 
   distinct(stockkeylabelold, assessmentyear, variable) %>% 
@@ -235,13 +277,6 @@ d.means <-
   gather(key=tmp, value=year, miny:maxy) %>% 
   arrange(stockkeylabelold, assessmentpair, variable, assessmentyear, label)
 
-# make list of stocks with required number of assessment years
-d.stocks <-
-  d.pairs %>% 
-  group_by(stockkeylabelold, variable) %>% 
-  summarise(n=n()) %>% 
-  filter(n >= 8)
-
 # calculate scaling parameters per stock and per year
 d.year <- 
   d.means %>%
@@ -249,8 +284,8 @@ d.year <-
   ungroup() %>% 
   select(stockkeylabelold, assessmentpair, variable, label, value) %>% 
   spread(key=label, value=value) %>% 
-  mutate(sigma            = (last-prior)/prior,
-         sigma_abs        = abs(sigma),
+  mutate(rho            = (prior-last)/last,
+         rho_abs        = abs(rho),
          assessmentyear = as.integer(substr(assessmentpair, 6,9))) 
 
 # calculate overall scaling parameter
@@ -258,11 +293,11 @@ d.scale <-
   d.year %>% 
   group_by(stockkeylabelold, variable) %>% 
   summarise(n         = n(),
-            n2        = sum(sigma_abs > 0.1, na.rm=TRUE),
-            sigma     = mean(sigma, na.rm=TRUE),
-            sigma_abs = mean(sigma_abs, na.rm=TRUE)
+            n2        = sum(rho_abs > 0.1, na.rm=TRUE),
+            rho     = mean(rho, na.rm=TRUE),
+            rho_abs = mean(rho_abs, na.rm=TRUE)
   ) %>%
-  mutate(sigma_abs    = percent_format(accuracy=1)(sigma_abs),
+  mutate(rho_abs    = percent_format(accuracy=1)(rho_abs),
          ratio        = paste(n2,n,sep="/")) 
 
 # calculate overall scaling parameter by decade
@@ -271,11 +306,11 @@ d.scalebydecade <-
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   group_by(stockkeylabelold, variable, decade) %>% 
   summarise(n         = n(),
-            n2        = sum(sigma_abs > 0.1, na.rm=TRUE),
-            sigma     = mean(sigma, na.rm=TRUE),
-            sigma_abs = mean(sigma_abs, na.rm=TRUE)
+            n2        = sum(rho_abs > 0.1, na.rm=TRUE),
+            rho     = mean(rho, na.rm=TRUE),
+            rho_abs = mean(rho_abs, na.rm=TRUE)
   ) %>%
-  mutate(sigma_abs    = percent_format(accuracy=1)(sigma_abs),
+  mutate(rho_abs    = percent_format(accuracy=1)(rho_abs),
          ratio        = paste(n2,n,sep="/"),
          ratio2       = percent_format(accuracy=1) (n2/n),
          ratio3       = paste(ratio2," (", n, ")", sep="") ) 
@@ -294,6 +329,12 @@ d.scalebydecade %>%
                missing=".",
                round=c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)) 
 
+# plot between differences in stock definition
+d.stockdefinitionschange %>% 
+  left_join(d.year, by=c("stockkeylabelold", "assessmentyear")) %>% 
+  filter(!is.na(assessmentpair)) %>% 
+  filter(variable == "stocksize") %>% 
+  
 
 # plot differences between two subsequent assessments
 
@@ -327,14 +368,15 @@ d.merged %>%
 
 
 # set the treshold for scale difference (10%)
-t <- 0.1
+t     <- 0.1
+myvar <- "stocksize"
 
 # plot scale differences between assessments
 # p2 <-
-  d.year %>% 
+d.year %>% 
   
-  distinct(stockkeylabelold, variable, assessmentyear, sigma) %>%
-  gather(key=metric, value=value, c(sigma)) %>% 
+  distinct(stockkeylabelold, variable, assessmentyear, rho) %>%
+  gather(key=metric, value=value, c(rho)) %>% 
   
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   
@@ -376,7 +418,7 @@ d.year %>%
   
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   
-  ggplot(aes(x=assessmentyear, y=sigma)) +
+  ggplot(aes(x=assessmentyear, y=rho)) +
   theme_publication() +
   theme(legend.position="none") +
   theme(panel.spacing = unit(0.1, "lines")) +
@@ -386,12 +428,24 @@ d.year %>%
   geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
   geom_hline(aes(yintercept = -t), colour="gray80", linetype="dashed", size=0.5) +
   
-  geom_point(data=d.benchmarks, aes(x=assessmentyear, y=0), colour="gray20", shape=18, size=4) +
+  geom_point(data=d.benchmarks, 
+             aes(x=assessmentyear+0.1, y=0.7), colour="gray20", fill="gray20", shape=25, size=2) +
+  
+  geom_point(data=d.assessmentmodelchange, 
+             aes(x=assessmentyear-0.1, y=-0.7), colour="red", fill="red", shape=24, size=2) +
+  
+  geom_segment(data=d.benchmarks, 
+               aes(x=assessmentyear+0.1, xend=assessmentyear+0.1, y=-0.75, yend=0.75), 
+               colour="gray20", size=0.5, linetype="dashed") +
+  
+  geom_segment(data=d.assessmentmodelchange, 
+               aes(x=assessmentyear-0.1, xend=assessmentyear-0.1, y=-0.75, yend=0.75), 
+               colour="red", size=0.5, linetype="dashed") +
   
   geom_line (aes(colour=factor(decade))) +
-  geom_point(aes(colour=factor(decade), size = ifelse( sigma_abs > t,0.3,0.0001))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( rho_abs > t,0.3,0.0001))) +
   geom_text(data=filter(d.scale, variable == myvar), 
-            aes(label=sigma_abs),  
+            aes(label=rho_abs),  
             x=-Inf, y=-Inf, hjust=-0.2, vjust=-0.8, inherit.aes=FALSE) +
   
   coord_cartesian(ylim=c(-0.75, 0.75)) +  # set the limits in cartesian space prevents outlier lines to be excluded

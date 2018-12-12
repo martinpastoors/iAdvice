@@ -23,6 +23,7 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 # load(file=paste(advicedir, "/rdata/iStock.RData",sep=""))
 # load(file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 # load(file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
+load(file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 
 
 # -----------------------------------------------------------------------------------------
@@ -34,6 +35,8 @@ iAssess %>%
   
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
                stockkeylabelold)) %>%
+  # filter(grepl("her-47|mac-67|mac-nea|mac-west", 
+  #              stockkeylabelold)) %>%
   
   mutate(
     stockkeylabelold = ifelse(grepl("ple-n",stockkeylabelold)                  , "ple (north sea)",stockkeylabelold),
@@ -47,7 +50,7 @@ iAssess %>%
     stockkeylabelold = ifelse(grepl("hke-n",stockkeylabelold)                  , "hke (north)",stockkeylabelold)
   ) %>% 
   
-  filter(!grepl("benchmark", purpose)) %>% 
+  filter(!grepl("benchmark|replace", purpose)) %>% 
   filter(stocksizeunits == "tonnes") %>% 
   
 
@@ -68,16 +71,18 @@ iAssess %>%
     panel.spacing.x = unit(1, "mm"),
     panel.spacing.y = unit(1, "mm"),
     strip.background = element_blank(),
-    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"))
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    legend.position  = "none"
   ) +  
   geom_line(aes(colour=factor(get(colourby)))) +
-  geom_dl(aes(label  = tyear, colour = get(colourby)), 
+  geom_dl(aes(label  = tyear, colour = get(colourby)),
           method = list(dl.combine("last.points"), cex = 0.8)) +
   guides(colour=guide_legend(title=colourby, nrow=1)) +
   expand_limits(y=0, x=1980) +
   scale_y_continuous(labels=scientific_format(digits=2), breaks=pretty_breaks()) +
   scale_x_continuous(breaks = pretty_breaks()) +
   labs(x="year", y="SSB (tonnes)", title="SSB") +
+  # facet_wrap(~stockkeylabelold, scales="free_y", ncol = 1)
   facet_wrap(~stockkeylabelold, scales="free_y")
   # facet_wrap(~speciesfaocode, scales="free_y")
   # facet_wrap(~decade, scales="free_x") 
