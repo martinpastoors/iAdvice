@@ -27,7 +27,7 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
-d.stockdefinions <-
+d.stockdefiniions <-
   
   iAdvice %>% 
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
@@ -55,7 +55,7 @@ d.stockdefinions <-
          stockkeychange = ifelse(is.na(lag(stockkeylabelold2)), NA, stockkeychange)) 
 
 d.stockdefinitionschange <-
-  d.stockdefinions %>% 
+  d.stockdefinitions %>% 
   filter(stockkeychange == 1) %>% 
   distinct(stockkeylabelold, assessmentyear)
 
@@ -184,7 +184,7 @@ d.assessments %>%
 # ---------------------------------------------------------------------------------------------
 
 removelastyears <- 0
-numberofyears   <- 10
+numberofyears   <- 8
 
 d <-
   iAssess %>%
@@ -208,8 +208,9 @@ d <-
   # filter(assessmentyear %in% c(2014,2015,2017,2018)) %>%
   # filter(grepl("cod", stockkeylabelold)) %>% 
   
-  filter(grepl("advice", purpose )) %>%
-  filter(stocksizeunits == "tonnes", unitofrecruitment == "thousands", fishingpressureunits %in% c("per year", "year-1")) %>% 
+  filter(purpose == "advice") %>%     
+  filter(stocksizeunits == "tonnes") %>% 
+  # filter(stocksizeunits == "tonnes", unitofrecruitment == "thousands", fishingpressureunits %in% c("per year", "year-1")) %>% 
   
   select(assessmentyear, year, stockkeylabelold, stocksize, recruitment, fishingpressure) %>% 
   distinct() %>% 
@@ -233,7 +234,9 @@ d.pairs <-
   rename(assessmentyearlast  = assessmentyear) %>% 
   filter(!is.na(assessmentyearprior))
 
-
+# d.pairs %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold)) %>% View()
+  
+  
 # data series with most recent (last) estimation
 d.last <-
   d.pairs %>% 
@@ -241,6 +244,8 @@ d.last <-
   left_join(d, by=c("stockkeylabelold", "variable", "assessmentyearlast" = "assessmentyear")) %>% 
   mutate(label="last") %>% 
   rename(assessmentyear = assessmentyearlast)
+
+# d.last %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold)) %>% View()
 
 # data series with previous (prior) estimation
 d.prior <-
@@ -250,25 +255,46 @@ d.prior <-
   mutate(label="prior") %>% 
   rename(assessmentyear = assessmentyearprior)
 
-# merge last and prior and filter appropriate years
+# d.prior %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold)) %>% View()
+
+# merge last and prior and filter roughly (just 5 years before the first year of the selection)
 d.merged <-
   bind_rows(d.last, d.prior) %>% 
+  group_by(stockkeylabelold, assessmentpair, variable) %>% 
+  
+  # filter the appropriate period
+  filter(year <= max(assessmentyear) - removelastyears,
+         year >= min(assessmentyear) - removelastyears - numberofyears - 5) 
+
+# d.merged %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), assessmentyear>= 2015) %>% View()
+
+d.merged2 <-
+  d.merged %>% 
   group_by(stockkeylabelold, assessmentpair, variable) %>% 
   
   # filter the appropriate period
   filter(year <= min(assessmentyear) - removelastyears,
          year >= min(assessmentyear) - removelastyears - numberofyears) %>% 
   
+  # sort
+  arrange(stockkeylabelold, assessmentpair, variable, assessmentyear) %>% 
+  
   # filter only years that are in common in last and prior
   group_by(stockkeylabelold, assessmentpair, variable, year) %>% 
-  filter(n() == 2) %>% 
-  
-  # sort
-  arrange(stockkeylabelold, assessmentpair, variable, assessmentyear)
+  mutate(n=n()) %>% 
+  filter(n() == 2) 
+
+
+
+d.merged  %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), 
+                       assessmentpair == "2017-2018") %>% View()
+
+d.merged2 %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), 
+                       assessmentpair == "2017-2018") %>% View()
 
 # create dataset of means
 d.means <-
-  d.merged %>% 
+  d.merged2 %>% 
   group_by(stockkeylabelold, assessmentpair, variable) %>% 
   mutate(   miny      = min(year),
             maxy      = max(year)) %>% 
@@ -276,6 +302,9 @@ d.means <-
   summarise(value = mean(value, na.rm=TRUE)) %>% 
   gather(key=tmp, value=year, miny:maxy) %>% 
   arrange(stockkeylabelold, assessmentpair, variable, assessmentyear, label)
+
+d.means %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), 
+                       assessmentpair == "2017-2018") %>% View()
 
 # calculate scaling parameters per stock and per year
 d.year <- 
@@ -329,49 +358,74 @@ d.scalebydecade %>%
                missing=".",
                round=c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)) 
 
+
+
+# ---------------------------------------------------------------------------------------------
 # plot between differences in stock definition
+# ---------------------------------------------------------------------------------------------
+
 d.stockdefinitionschange %>% 
   left_join(d.year, by=c("stockkeylabelold", "assessmentyear")) %>% 
   filter(!is.na(assessmentpair)) %>% 
-  filter(variable == "stocksize") %>% 
+  filter(variable == "stocksize") 
   
 
+# ---------------------------------------------------------------------------------------------
 # plot differences between two subsequent assessments
+# ---------------------------------------------------------------------------------------------
 
-myvar <- "stocksize"
+myvar     <- "stocksize"
+myspecies <- "cod" 
 
+  
 d.merged %>% 
-  
   filter(variable == myvar) %>% 
+  filter(grepl(myspecies, stockkeylabelold)) %>% 
   
-  ggplot(aes(x=year, y=value)) +
+  ggplot(aes(x=year, y=value, group=assessmentyear)) +
   theme_publication() +
-  theme(# legend.position = "none",
+  theme(
+    legend.position = "none",
     axis.text       = element_text(size=9),
     strip.text      = element_text(face="plain"),
     panel.spacing   = unit(0.1, "lines"),
     strip.text.y    = element_text(angle = 0)) +
-  geom_line(aes(colour=factor(label))) +
-  geom_point(aes(colour=factor(label))) +
   
-  # geom_dl(aes(label  = substr(assessmentyear,3,4), colour=factor(label)),
-  #         method = list(dl.combine("last.points"), cex = 0.5)) +
-  geom_line(data=filter(d.means, variable == myvar), 
-            aes(x=year, y=value, colour=factor(label)), linetype="dashed") +
+  geom_line(size=0.5) +
+  
+  geom_line(data=filter(d.merged2, variable == myvar, grepl(myspecies, stockkeylabelold)), 
+            aes(colour=factor(label)), size=1) +
+  # geom_point(data=filter(d.merged2, variable == myvar, grepl(myspecies, stockkeylabelold), year==min(year)),
+  #            aes(colour=factor(label))) +
+  # geom_point(data=filter(d.merged2, variable == myvar, grepl(myspecies, stockkeylabelold), year==max(year)),
+  #            aes(colour=factor(label))) +
+  
+  geom_line(data=filter(d.means, variable == myvar, grepl(myspecies, stockkeylabelold)),
+            aes(x=year, y=value, colour=factor(label)), linetype="dashed", lineend="butt") +
+  geom_point(data=filter(d.means, variable == myvar, grepl(myspecies, stockkeylabelold), year==min(year)),
+             aes(colour=factor(label)), size=1) +
+  geom_point(data=filter(d.means, variable == myvar, grepl(myspecies, stockkeylabelold), year==max(year)),
+             aes(colour=factor(label)), size=1) +
   
   scale_y_continuous(labels=scientific_format(digits=2)) +
   scale_x_continuous(breaks = pretty_breaks()) +
   expand_limits(y=0) +
-  # facet_grid(label ~ header, scales="free_y")
-  # facet_grid(stockkeylabelold ~ assessmentpair, scales="free")
   facet_wrap( ~ assessmentpair, scales="free")
 
+# d.prior %>%
+#   filter(variable == myvar) %>%
+#   filter(grepl(myspecies, stockkeylabelold)) %>%
+#   filter(year > 2015) %>%
+#   View()
+
+# ---------------------------------------------------------------------------------------------
+# plot scale differences between assessments
+# ---------------------------------------------------------------------------------------------
 
 # set the treshold for scale difference (10%)
 t     <- 0.1
 myvar <- "stocksize"
 
-# plot scale differences between assessments
 # p2 <-
 d.year %>% 
   

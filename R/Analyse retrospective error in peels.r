@@ -39,6 +39,9 @@ load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 d <-
   iAssess %>%
   
+  # Exclude prediction years
+  filter(year <= assessmentyear) %>% 
+  
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", 
                stockkeylabelold)) %>%
   
@@ -57,7 +60,7 @@ d <-
   # filter(grepl("ple", stockkeylabelold)) %>%
   # filter(assessmentyear %in% c(2014,2015,2017,2018)) %>%
   
-  filter(!grepl("hke", stockkeylabelold)) %>% 
+  # filter(!grepl("hke", stockkeylabelold)) %>% 
   
   filter(purpose == "advice") %>%     
   filter(stocksizeunits       == "tonnes") %>%  # Note: this is filtering on absolute vs relative; but not really
@@ -65,7 +68,8 @@ d <-
   select(assessmentyear, year, stockkeylabelold, stocksize, recruitment, fishingpressure, purpose) %>% 
   distinct() %>% 
   gather(key=variable, value=value, stocksize:fishingpressure) %>% 
-  filter(!is.na(value)) 
+  filter(!is.na(value), value != 0.0) 
+
 
 
 # create meta data on peels
@@ -105,32 +109,32 @@ d.inpeels <-
   # filter(variable == "stocksize") %>% 
   # filter(year >= assessmentyearbase - 10) 
   
-d.inpeels %>%
-  filter(grepl("had", stockkeylabelold), assessmentyearbase == 2018, variable =="stocksize") %>%
-  filter(year >= 2008) %>%
-  arrange(desc(assessmentyear), desc(year)) %>%
-  View()
+# d.inpeels %>%
+#   filter(grepl("had", stockkeylabelold), assessmentyearbase == 2018, variable =="stocksize") %>%
+#   filter(year >= 2008) %>%
+#   arrange(desc(assessmentyear), desc(year)) %>%
+#   View()
 
-d.inpeels %>%
-  group_by(stockkeylabelold, variable, assessmentyearbase, peel) %>%
-  filter(grepl("cod", stockkeylabelold)) %>%
-  filter(year >= 2010) %>%
-  filter(variable == "stocksize") %>%
-  spread(key=year, value=value) %>%
-  arrange(desc(assessmentyearbase), peel, desc(assessmentyear)) %>%
-  View()
+# d.inpeels %>%
+#   group_by(stockkeylabelold, variable, assessmentyearbase, peel) %>%
+#   filter(grepl("cod", stockkeylabelold)) %>%
+#   filter(year >= 2010) %>%
+#   filter(variable == "stocksize") %>%
+#   spread(key=year, value=value) %>%
+#   arrange(desc(assessmentyearbase), peel, desc(assessmentyear)) %>%
+#   View()
 
-d.inpeels %>% 
-  
-  filter(grepl("cod", stockkeylabelold)) %>%
-  filter(year >= 2010) %>%
-  filter(variable == "stocksize") %>%
-  
-  group_by(stockkeylabelold, assessmentyearbase, year) %>%
-  summarize(n= n()) %>% 
-  spread(key=year, value=n) %>%
-  arrange(desc(assessmentyearbase)) %>%
-  View()
+# d.inpeels %>% 
+#   
+#   filter(grepl("cod", stockkeylabelold)) %>%
+#   filter(year >= 2010) %>%
+#   filter(variable == "stocksize") %>%
+#   
+#   group_by(stockkeylabelold, assessmentyearbase, year) %>%
+#   summarize(n= n()) %>% 
+#   spread(key=year, value=n) %>%
+#   arrange(desc(assessmentyearbase)) %>%
+#   View()
   
 # ---------------------------------------------------------------------------------------------
 # Calculate Mohn and Jonsson's retrospective metrics in peels
@@ -142,6 +146,8 @@ d.mohnjonsson_inpeels1 <-
   
   filter( (peel==0 & year >= max(year-10)) | (peel != 0 & year == max(year)) ) %>% 
   
+  filter( variable == "stocksize") %>% 
+  
   group_by(stockkeylabelold, assessmentyearbase, variable, year) %>% 
   arrange(stockkeylabelold, desc(assessmentyearbase), variable, desc(year)) %>% 
   mutate(value_last  = lag(value, n=1),
@@ -152,7 +158,8 @@ d.mohnjonsson_inpeels1 <-
   
   group_by(stockkeylabelold, assessmentyearbase, variable) %>% 
   mutate(jonsson_dev  = (log(value/value_last) - mean(jonsson_ab)),
-         jonsson_dev2 = (jonsson_dev)^2 ) 
+         jonsson_dev2 = (jonsson_dev)^2 ,
+         jonsson_asd  = abs(jonsson_dev)) 
 
 d.mohnjonsson_inpeels2 <-
   d.mohnjonsson_inpeels1 %>% 
@@ -204,7 +211,8 @@ d.ralston_inpeels2 <-
     meanlogBdev = mean(logBdev),
     sumlogBdev2 = sum(logBdev2),
     n_1         = mean(n_1), 
-    avglogBdev2 = sumlogBdev2/n_1)
+    avglogBdev2 = sumlogBdev2/n_1, 
+    ralston_sigma = sqrt(sumlogBdev2/n_1)) 
 
 # and calculate by stock and assessmentyearbase
 d.ralston_inpeels3 <-
@@ -228,24 +236,6 @@ d.ralston_inpeels4 <-
   group_by(stockkeylabelold) %>% 
   summarize(ralston_sigma = mean(ralston_sigma))
   
-# plot ralston by assessmentyearbase
-d.ralston_inpeels3 %>% 
-  ggplot(aes(assessmentyearbase, ralston_sigma)) +
-  theme_publication() +
-  geom_line() +
-  facet_wrap(~stockkeylabelold)
-
-# compare ralston with and without peels
-bind_rows(
-  mutate(d.ralston3, type="in one"),
-  mutate(d.ralston_inpeels4, type="in peels") ) %>% 
-  
-  ggplot(aes(stockkeylabelold, ralston_sigma, group=type)) +
-  theme_publication() +
-  geom_bar(aes(fill=type), stat="identity", position="dodge") +
-  coord_flip()
-
-
 # ---------------------------------------------------------------------------------------------
 # plot of the retrospective patterns in peels (cod only)
 # ---------------------------------------------------------------------------------------------
@@ -265,7 +255,7 @@ d.segment <-
   arrange(stockkeylabelold, desc(assessmentyearbase), desc(assessmentyear), peel, desc(year)) 
 
 d.inpeels %>%
-
+  
   filter(grepl(my.species, stockkeylabelold)) %>%
   filter(variable == "stocksize") %>%
   filter(year >= assessmentyearbase - 10) %>% 
@@ -285,6 +275,65 @@ d.inpeels %>%
   scale_y_continuous(breaks = pretty_breaks()) +
   scale_x_continuous(breaks = pretty_breaks()) +
   facet_wrap(~assessmentyearbase, scales="free")
+
+# ---------------------------------------------------------------------------------------------
+# plot of metrics by year
+# ---------------------------------------------------------------------------------------------
+
+bind_rows(d.mohnjonsson_inpeels2, d.ralston_inpeels3) %>% 
+  ungroup() %>% 
+  mutate(jonsson_ab = abs(jonsson_ab),
+         mohn_rho   = abs(mohn_rho)) %>% 
+  select(stockkeylabelold, year=assessmentyearbase, jonsson_ab, jonsson_asd, mohn_rho, ralston_sigma) %>% 
+  gather(key=metric, value=value, jonsson_asd:ralston_sigma) %>%
+  filter(!is.na(value)) %>% 
+  separate(metric, into=c("author", "metric"), by="_") %>%
+  group_by(stockkeylabelold, author, metric, year) %>% 
+  mutate(n=n()) %>% 
+  # View()
+  
+  ggplot() +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y = element_text(angle = 180),
+    legend.position  = "none"
+  ) +  
+  
+  geom_line(aes(x=year, y = value)) +
+  geom_point(aes(x=year, y = value)) +
+  coord_cartesian(ylim=c(0, 1.5)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  scale_y_continuous(position="right") +
+  labs(y="") +
+  facet_grid(stockkeylabelold~metric, switch="y")
+
+
+# -------------------------------------------------------------------------------------------------
+# Other plots
+# -------------------------------------------------------------------------------------------------
+
+# plot ralston by assessmentyearbase
+d.ralston_inpeels3 %>% 
+  ggplot(aes(assessmentyearbase, ralston_sigma)) +
+  theme_publication() +
+  geom_line() +
+  facet_wrap(~stockkeylabelold)
+
+# compare ralston with and without peels
+bind_rows(
+  mutate(d.ralston3, type="in one"),
+  mutate(d.ralston_inpeels4, type="in peels") ) %>% 
+  
+  ggplot(aes(stockkeylabelold, ralston_sigma, group=type)) +
+  theme_publication() +
+  geom_bar(aes(fill=type), stat="identity", position="dodge") +
+  coord_flip()
+
+
+
 
 # ---------------------------------------------------------------------------------------------
 # plot of retrospective metrics per assessmentyear (and looking back)

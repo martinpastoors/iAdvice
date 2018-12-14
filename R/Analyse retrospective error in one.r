@@ -36,7 +36,7 @@ load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 # Create subset of series (stocks) with at least 8 years of data and SSB in tonnes, F in year-1
 # ---------------------------------------------------------------------------------------------
 
-d %>% filter(stockkeylabelold == "hke-nrtn", assessmentyear==2000) %>% View()
+# d %>% filter(stockkeylabelold == "hke-nrtn", assessmentyear==2000) %>% View()
 
 d <-
   iAssess %>%
@@ -70,7 +70,7 @@ d <-
   select(assessmentyear, year, stockkeylabelold, stocksize, recruitment, fishingpressure, purpose) %>% 
   distinct() %>% 
   gather(key=variable, value=value, stocksize:fishingpressure) %>% 
-  filter(!is.na(value)) 
+  filter(!is.na(value), value != 0.0) 
 
 # d %>% 
 #   group_by(stockkeylabelold, variable) %>% 
@@ -95,6 +95,7 @@ d <-
 # Calculate Mohn's and Jonsson's metrics all compared to the most recent assessment
 # ---------------------------------------------------------------------------------------------
 
+# calculations by year
 d.mohnjonsson1 <-
   d %>% 
   
@@ -117,9 +118,12 @@ d.mohnjonsson1 <-
   
   group_by(stockkeylabelold, variable) %>% 
   mutate(jonsson_dev  = (log(value/value_last) - mean(jonsson_ab)),
-         jonsson_dev2 = (jonsson_dev)^2 ) 
-  
+         jonsson_dev2 = (jonsson_dev)^2,
+         jonsson_asd  = abs(jonsson_dev)) 
 
+# d.mohnjonsson1 %>% filter(jonsson_ab == 0.0) %>% View()
+
+# calculations by stock
 d.mohnjonsson2 <-
   d.mohnjonsson1 %>% 
   
@@ -179,7 +183,7 @@ d.ralston2 <-
     meanlogBdev = mean(logBdev),
     sumlogBdev2 = sum(logBdev2),
     n_1         = mean(n_1), 
-    avglogBdev2 = sumlogBdev2/n_1)
+    ralston_sigma = sqrt(sumlogBdev2/n_1))
   
 # and calculate by stock
 d.ralston3 <-
@@ -197,6 +201,125 @@ d.ralston3 <-
     ralston_sigma = sqrt(sumlogBdev2all / n_1),
     cv            = percent(sqrt(exp(ralston_sigma^2)-1)))
 
+# ---------------------------------------------------------------------------------------------
+# Plot of log biomass deviations (distributions) for Jonsson and Ralston
+# ---------------------------------------------------------------------------------------------
+
+bind_rows(d.mohnjonsson1, d.ralston1) %>% 
+
+  ggplot() +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    legend.position  = "none"
+  ) +  
+  
+  geom_histogram(aes(x=logBdev, y = ..density..), colour="black",fill=NA) +
+  geom_freqpoly(aes(x=jonsson_dev, y=..density..), colour="red") +
+  geom_vline(aes(xintercept=0), linetype="dashed") +
+  facet_wrap(~stockkeylabelold)
+
+
+
+# ---------------------------------------------------------------------------------------------
+# plot of metrics by year
+# ---------------------------------------------------------------------------------------------
+
+bind_rows(d.mohnjonsson1, d.ralston2) %>% 
+  ungroup() %>% 
+  mutate(jonsson_ab = abs(jonsson_ab),
+         mohn_rho   = abs(mohn_rho)) %>% 
+  select(stockkeylabelold, year, jonsson_ab, jonsson_asd, mohn_rho, ralston_sigma) %>% 
+  gather(key=metric, value=value, jonsson_asd:ralston_sigma) %>%
+  filter(!is.na(value)) %>% 
+  separate(metric, into=c("author", "metric"), by="_") %>%
+  group_by(stockkeylabelold, author, metric, year) %>% 
+  mutate(n=n()) %>% 
+
+  ggplot() +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y = element_text(angle = 180),
+    legend.position  = "none"
+  ) +  
+  
+  geom_line(aes(x=year, y = value)) +
+  geom_point(aes(x=year, y = value)) +
+  coord_cartesian(ylim=c(0, 1.5)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  scale_y_continuous(position="right") +
+  labs(y="") +
+  facet_grid(stockkeylabelold~metric, switch="y")
+
+# ---------------------------------------------------------------------------------------------
+# plot of summary metrics per stock
+# ---------------------------------------------------------------------------------------------
+
+# NASTY. NEED TO FIND A BETTER WAY OF SHOWING THIS INFORMATION
+
+bind_rows(d.mohnjonsson2, d.ralston3) %>% 
+  select(stockkeylabelold, jonsson_asd, mohn_rho_abs, ralston_sigma) %>% 
+  gather(key=metric, value=value, jonsson_asd:ralston_sigma) %>%
+  filter(!is.na(value)) %>% 
+  group_by(metric) %>% 
+  mutate(value_scaled = value / mean(value),
+         stockkeylabelold = factor(stockkeylabelold)) %>% 
+  
+  ggplot(aes(x=stockkeylabelold, y=value)) +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y = element_text(angle = 180),
+    legend.position  = "none"
+  ) +  
+  
+  geom_bar(stat= "identity", alpha=0.8, colour="black", fill="gray50", width=0.4,
+           position = position_stack(reverse = FALSE) ) +
+  coord_flip() +
+  labs(x="") +
+  facet_grid(.~metric, switch="y")
+
+
+
+# ---------------------------------------------------------------------------------------------
+# number of observations included in Ralston calculations
+# ---------------------------------------------------------------------------------------------
+
+d %>% 
+  filter(variable == "stocksize") %>% 
+  filter(year >= 1980) %>% 
+  group_by(stockkeylabelold, year) %>%
+  summarize(n        = n()) %>% 
+  # group_by(stockkeylabelold) %>% 
+  # mutate(b = (log(value) - meanlogB)^2,
+  #        n = mean(n)) %>% 
+  
+  ggplot(aes(year, n)) +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    legend.position  = "none"
+  ) +  
+  geom_line() +
+  geom_point() +
+  facet_wrap(~stockkeylabelold)
+
+
+# ---------------------------------------------------------------------------------------------
+# other plots
+# ---------------------------------------------------------------------------------------------
 
 ggplot(data=d.ralston1, aes(x=logBdev)) +
   geom_histogram(aes(y = ..density..), colour="black",fill=NA) + 
@@ -220,16 +343,7 @@ ggplot(data=d.mohnjonsson1) +
   labs(y="deviance")+
   facet_wrap(~stockkeylabelold)
 
-bind_rows(d.mohnjonsson2, d.ralston3) %>% 
-  select(stockkeylabelold, jonsson_asd, mohn_rho_abs, ralston_sigma) %>% 
-  gather(key=metric, value=value, jonsson_asd:ralston_sigma) %>%
-  filter(!is.na(value)) %>% 
-  group_by(metric) %>% 
-  mutate(value_scaled = value / mean(value)) %>% 
-  
-  ggplot(aes(x=stockkeylabelold, y=value_scaled)) +
-  geom_bar(aes(fill=metric), stat= "identity", alpha=0.8, position="dodge") +
-  coord_flip()
+
 
 # ---------------------------------------------------------------------------------------------
 # Plot of all metrics by year calculated over the whole time series
@@ -262,16 +376,12 @@ bind_rows(
   # labs(x="assessmentyear", y="", title="Retrospective metrics") +
   facet_wrap(~stockkeylabelold)
 
-# Look for retrospective measures that capture variation and scale differences
-# Jonsson & Hjorleifsson 2000
-# Hurtado 2015
-# Leseur 2004
 
 # ---------------------------------------------------------------------------------------------
-# plot of the retrospective patterns in one (example: hake)
+# plot of the retrospective patterns in one
 # ---------------------------------------------------------------------------------------------
 
-my.species <- "hke"
+# my.species <- "hke"
 
 d.selection <-
   d %>%
@@ -301,14 +411,19 @@ d.points <-
 d.selection %>%   
   ggplot(aes(x=year, y=value)) +
   theme_publication() +
-  theme(panel.spacing = unit(0.1, "lines")) +
-  theme(legend.position="none") +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    legend.position  = "none"
+  ) +  
   
+  # geom_boxplot(aes(group=year), outlier.shape=NA, colour="gray50", fill=NA) +
   geom_segment(data=d.segment, 
                aes(x=year, xend=year,y=value,yend=base), colour="gray", linetype="dashed", size=0.5) +
   geom_line(aes(colour = plot, size=plot, group=assessmentyear)) +
   geom_point(data=d.points) +
-
   scale_colour_manual(values=c(last = "red", other="black")) +
   scale_size_manual (values=c(last=1, other=0.5)) +
   expand_limits(y=0) +
@@ -318,20 +433,4 @@ d.selection %>%
   facet_wrap(~stockkeylabelold, scales="free")
 
 
-
-# number of observations included in Ralston calculations
-d %>% 
-  filter(variable == "stocksize") %>% 
-  filter(year >= 1980) %>% 
-  group_by(stockkeylabelold, year) %>%
-  summarize(n        = n()) %>% 
-  # group_by(stockkeylabelold) %>% 
-  # mutate(b = (log(value) - meanlogB)^2,
-  #        n = mean(n)) %>% 
-  
-  ggplot(aes(year, n)) +
-  theme_publication() +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~stockkeylabelold)
 

@@ -303,16 +303,79 @@ sag <-
   left_join(iStockkey, by="stockkey") %>% 
   
   # make logical
-  mutate_at(c("published"),  funs(as.logical)) 
+  mutate_at(c("published"),  funs(as.logical)) %>% 
   
+  # remove duplicate assessments (Careful!)
+  group_by(stockkey, stockkeylabel, assessmentyear, purpose, year) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 
+
+
+# sag_without_currentyear <-
+#   sag %>% 
+#   filter(purpose == "advice") %>% 
+#   distinct(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear, year, .keep_all = FALSE) %>%
+#   group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear) %>% 
+#   filter(max(year) < assessmentyear) %>% 
+#   distinct(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear, .keep_all = FALSE) %>% 
+#   
+#   # now couple with iAdvice
+#   left_join(iAdvice, 
+#             by=c("stockkey","stockkeylabel","stockkeylabelnew","stockkeylabelold","purpose","assessmentyear")) %>% 
+#   filter(!is.na(ssbay)) 
+  
 
 # glimpse(sag)
 # sag %>% distinct(purpose) %>% View()
 # sag %>% distinct(published) %>% View()
 # sag %>% distinct(purpose, published) %>% View()
 # sort(unique(sag$stockkeylabel))
+
+# get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
+#   lowcase() %>% 
+#   mutate_at(c("year","stocksize"), funs(as.numeric)) %>% 
+#   filter(grepl("had-346a", stockkeylabel)) %>%
+#   filter(assessmentyear == 2014) %>%
+#   filter(tolower(purpose)=="advice") %>%
+#   
+#   ggplot(aes(x=year,y=stocksize, group=assessmentkey)) +
+#   theme_publication() +
+#   geom_line(aes(colour=factor(assessmentkey)))
+
+# How many double assessments in SAG?
+
+# sag_doubles <-
+#   get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>%
+#   mutate_at(c("stocksize"), funs(as.numeric)) %>%
+#   mutate_at(c("purpose"), funs(tolower)) %>%
+#   mutate_at(c("stockkey", "assessmentyear", "year"), funs(as.integer)) %>%
+# 
+#   distinct(assessmentkey, stockkey, stockkeylabel, purpose, assessmentyear, .keep_all = FALSE) %>%
+#   group_by(stockkey, stockkeylabel, purpose, assessmentyear) %>%
+#   filter(n() > 1) %>%
+#   ungroup() %>%
+#   arrange(stockkeylabel, stockkey, purpose, assessmentyear) %>%
+#   select (stockkeylabel, stockkey, purpose, assessmentyear, assessmentkey )
+
+# t <-
+#   get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
+#   mutate_at(c("stocksize"), funs(as.numeric)) %>% 
+#   mutate_at(c("purpose"), funs(tolower)) %>% 
+#   mutate_at(c("stockkey", "assessmentyear", "year"), funs(as.integer)) 
+  
+# sag_doubles %>% 
+#   left_join(t, 
+#             by=c("assessmentkey", "stockkey", "stockkeylabel", "purpose", "assessmentyear")) %>% 
+#   mutate(label = paste(stockkeylabel, assessmentyear, sep=" ")) %>% 
+#   
+#   ggplot(aes(x=year,y=stocksize, group=assessmentkey)) +
+#   theme_publication() +
+#   theme(legend.position="none") +
+#   geom_line(aes(colour=factor(assessmentkey))) +
+#   facet_wrap(~label, scales="free_y")
 
 # sag %>%
 #   filter(grepl("cod-347d", stockkeylabelold)) %>%
