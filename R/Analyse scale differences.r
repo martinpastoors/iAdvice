@@ -27,7 +27,7 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
-d.stockdefiniions <-
+d.stockdefinitions <-
   
   iAdvice %>% 
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-34|had-n|hke-n", 
@@ -284,14 +284,6 @@ d.merged2 <-
   mutate(n=n()) %>% 
   filter(n() == 2) 
 
-
-
-d.merged  %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), 
-                       assessmentpair == "2017-2018") %>% View()
-
-d.merged2 %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), 
-                       assessmentpair == "2017-2018") %>% View()
-
 # create dataset of means
 d.means <-
   d.merged2 %>% 
@@ -302,9 +294,6 @@ d.means <-
   summarise(value = mean(value, na.rm=TRUE)) %>% 
   gather(key=tmp, value=year, miny:maxy) %>% 
   arrange(stockkeylabelold, assessmentpair, variable, assessmentyear, label)
-
-d.means %>%   filter(variable == myvar, grepl(myspecies, stockkeylabelold), 
-                       assessmentpair == "2017-2018") %>% View()
 
 # calculate scaling parameters per stock and per year
 d.year <- 
@@ -360,14 +349,6 @@ d.scalebydecade %>%
 
 
 
-# ---------------------------------------------------------------------------------------------
-# plot between differences in stock definition
-# ---------------------------------------------------------------------------------------------
-
-d.stockdefinitionschange %>% 
-  left_join(d.year, by=c("stockkeylabelold", "assessmentyear")) %>% 
-  filter(!is.na(assessmentpair)) %>% 
-  filter(variable == "stocksize") 
   
 
 # ---------------------------------------------------------------------------------------------
@@ -408,7 +389,7 @@ d.merged %>%
              aes(colour=factor(label)), size=1) +
   
   scale_y_continuous(labels=scientific_format(digits=2)) +
-  scale_x_continuous(breaks = pretty_breaks()) +
+  scale_x_continuous(breaks = pretty_breaks(n=3)) +
   expand_limits(y=0) +
   facet_wrap( ~ assessmentpair, scales="free")
 
@@ -451,7 +432,19 @@ d.year %>%
   geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
   geom_hline(aes(yintercept = -t), colour="gray80", linetype="dashed", size=0.5) +
   
-  geom_point(data=d.benchmarks, aes(x=assessmentyear, y=0), colour="gray20", shape=18, size=4, inherit.aes = FALSE) +
+  geom_point(data=d.benchmarks, 
+             aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
+  
+  geom_point(data=d.assessmentmodelchange, 
+             aes(x=assessmentyear-0.1, y=-1.0), colour="red", fill="red", shape=24, size=2) +
+  
+  geom_segment(data=d.benchmarks, 
+               aes(x=assessmentyear+0.1, xend=assessmentyear+0.1, y=-1.0, yend=1.0), 
+               colour="gray20", size=0.5, linetype="dashed") +
+  
+  geom_segment(data=d.assessmentmodelchange, 
+               aes(x=assessmentyear-0.1, xend=assessmentyear-0.1, y=-1.0, yend=1.0), 
+               colour="red", size=0.5, linetype="dashed") +
   
   geom_line (aes(colour=factor(decade))) +
   geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > t,0.3,0.0001))) +
@@ -467,7 +460,10 @@ d.year %>%
   facet_wrap(~stockkeylabelold)
 
 
+# ---------------------------------------------------------------------------------------------
 # plot scale differences between assessments for stocksize, recruitment and fishing pressure
+# ---------------------------------------------------------------------------------------------
+
 d.year %>% 
   
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
@@ -517,3 +513,97 @@ plot_grid(p1 + theme(legend.position = "none",
                      axis.ticks.y   = element_blank(),
                      plot.margin = unit(c(3, 3, 3, 0), "mm")),
           ncol=2, align = 'h', rel_widths = c(35, 10))
+
+
+# ---------------------------------------------------------------------------------------------
+# plot of differences by decade 
+# ---------------------------------------------------------------------------------------------
+
+# set the treshold for scale difference (10%)
+t     <- 0.1
+myvar <- "stocksize"
+
+# p2 <-
+d.year %>% 
+  
+  distinct(stockkeylabelold, variable, assessmentyear, rho) %>%
+  gather(key=metric, value=value, c(rho)) %>% 
+  
+  mutate(    
+    decade = as.character(10*floor(assessmentyear/10)), 
+    status = ifelse(abs(value) > t, "above", "below") 
+  ) %>% 
+  
+  filter(variable == myvar) %>% 
+  group_by(stockkeylabelold, variable, decade, status) %>% 
+  summarize(n = n()) %>% 
+  mutate(n = ifelse(status == "below", -1, 1) * n) %>% 
+  
+  ggplot(aes(x=decade, y=n)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0.5, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_bar (aes(fill=ifelse( n > 0,"red","green")), stat="identity") +
+
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  
+  scale_y_continuous(breaks = pretty_breaks()) +
+  # scale_x_continuous(breaks = pretty_breaks()) +
+  labs(x=" ", y="") +
+  # facet_grid(stockkeylabelold~metric, switch = "y")
+  facet_wrap(~stockkeylabelold)
+
+# ---------------------------------------------------------------------------------------------
+# plot of jumps relative to model change 
+# ---------------------------------------------------------------------------------------------
+
+d.year %>% 
+  
+  distinct(stockkeylabelold, variable, assessmentyear, rho) %>%
+  gather(key=metric, value=value, c(rho)) %>% 
+  
+  mutate(    
+    decade = as.character(10*floor(assessmentyear/10)), 
+    status = ifelse(abs(value) > t, "above", "below") 
+  ) %>% 
+  
+  filter(variable == myvar) %>% 
+  
+  left_join(d.assessmentmodelchange, by=c("stockkeylabelold", "assessmentyear")) %>% 
+  mutate(assessmentmodelchange = ifelse(is.na(assessmentmodel), FALSE, TRUE)) %>% 
+  group_by(status, assessmentmodelchange) %>% 
+  summarize(n = n()) %>% 
+  mutate(n = ifelse(status == "below", -1, 1) * n) %>% 
+  
+  ggplot(aes(x=assessmentmodelchange, y=n)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0.5, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_bar (aes(fill=ifelse( n > 0,"red","green")), stat="identity") +
+  
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  
+  scale_y_continuous(breaks = pretty_breaks()) 
+
+# ---------------------------------------------------------------------------------------------
+# plot between differences in stock definition (UNFINISHED)
+# ---------------------------------------------------------------------------------------------
+
+d.stockdefinitionschange %>% 
+  left_join(d.year, by=c("stockkeylabelold", "assessmentyear")) %>% 
+  filter(!is.na(assessmentpair)) %>% 
+  filter(variable == "stocksize") 
