@@ -23,13 +23,14 @@ source("../mptools/r/my_utils.r")
 # load("../prf/rdata/world.df.RData")
 
 # get dropbox directory
-dropboxdir <- paste(get_dropbox(), "/ICES Assessment database", sep="")
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # open Sframe (STECF) data
 load(file = file.path(dropboxdir,"rdata", "STECF sframe.RData"))
 
 head(stockdef)
 head(fmz)
+iceshape::faolink %>% filter(grepl("27.3", name)) %>% View()
 
 
 # ----------------------------------------------------------------------------------------------------------
@@ -51,9 +52,11 @@ world1 <- sf::st_as_sf(
 # plot the required stocks, combine with fao areas (in package iceshape) and generate plot
 # ----------------------------------------------------------------------------------------------------------
 
+fmz %>% filter(grepl("PLE/03AN.", TAC_id)) %>% View()
+
 fmz %>% 
   
-  filter(grepl("COD/1N2AB.", TAC_id)) %>% 
+  filter(grepl("PLE/03AN.", TAC_id)) %>% 
   # filter(grepl("COD/[A-Z0-9]", TAC_id)) %>% 
   mutate(unit = tolower(area)) %>% 
   arrange(TAC_id) %>% 
