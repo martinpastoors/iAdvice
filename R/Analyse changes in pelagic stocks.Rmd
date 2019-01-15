@@ -1,0 +1,217 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# Analyse changes in pelagic stocks.Rmd
+#
+# 07/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
+# 10/01/2018 made small changes to the table
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(tidyverse) # for piping and easy coding
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(RColorBrewer) # colours
+library(lubridate)
+library(scales)
+library(directlabels)  # for printing labels at end of geom lines
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+# create subset for advice
+d <-
+  iAdvice %>% 
+  
+  filter(grepl("her-47|mac-67|mac-nea|whb-c|whb-n|hom-c|hom-w|her-3a22|her-noss", 
+               stockkeylabelold)) %>%
+  filter(!grepl("benchmark", purpose)) %>% 
+  filter(assessmentyear >= 2008) %>% 
+  ungroup()
+
+# create subset for assessments
+e <-
+  iAssess %>% 
+  filter(stockkeylabelold %in% unique(d$stockkeylabelold)) %>% 
+  filter(assessmentyear == 2018) %>% 
+  filter(year >= 2008) %>% 
+  filter(year <= assessmentyear) %>% 
+  filter(adviceonstock == TRUE)
+
+```
+
+
+
+**Analysis of advice changes in a number of key pelagic stocks**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+**Introduction**
+
+In this document an overview is presented of the ICES advice for a number of key pelagic stocks relevant to the Pelagic Advisory Council (her-347d, her-noss, her-3a22, hom-west, mac-nea, whb-comb). The analysis is based on ICES advice database (Pastoors et al, in prep.) and the ICES stock assessment graph database ( [ICES SAG](www.http://ices.dk/marine-data/tools/Pages/stock-assessment-graphs.aspx)). The document outlines changes in reference points, changes in advice and a comparison between stock size assumed as the basis for the forecast and the most recent estimates of stock size from the 2018 assessments.    
+
+**Changes in F reference points**
+
+Fpa (blue) and Fmsy (green) reference points points as estimated in the different assessment years. Note that for a number of years it was no longer deemed necessary to provide Fpa estimates, and they were consequently removed from the advice documents. In the more recent years, Fpa values have been added again on the request of ICES clients. 
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+d %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, fpa, fmsy) %>% 
+  gather(key=var, value=value, fpa:fmsy) %>% 
+  
+  ggplot(aes(x=assessmentyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_line(aes(y=value, group=var, colour=factor(var))) +
+  geom_point(aes(y=value, group=var, colour=factor(var))) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="F") +
+  scale_color_manual(values = c("green", "blue")) +
+  facet_wrap(~stockkeylabelold, scales="free_y")
+
+```
+
+**Changes in biomass points**
+
+Blim (red) and MSY Btrigger (green) reference points points as estimated in the different assessment years. 
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+d %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, blim, msybtrigger) %>% 
+  gather(key=var, value=value, blim:msybtrigger) %>% 
+  
+  ggplot(aes(x=assessmentyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_line(aes(y=value, group=var, colour=factor(var))) +
+  geom_point(aes(y=value, group=var, colour=factor(var))) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="SSB") +
+  scale_color_manual(values = c("red", "green")) +
+  facet_wrap(~stockkeylabelold, scales="free_y")
+```
+
+**Changes in advice**
+
+Recommended catches (in fact: max of advised landings) presented for each of the different TAC years. The red dots and line refer to the most recent published advice, the blue dots refer to replaced advices, due to errors or revisions in the stock assessments.  
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+d %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, advisedlandingsmax) %>% 
+  ggplot(aes(x=tacyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_point(aes(y       = advisedlandingsmax, 
+                 colour  = ifelse(adviceonstock==TRUE,'advice','replaced'))) +
+  geom_line(aes(y        = advisedlandingsmax, 
+                colour   = ifelse(adviceonstock==TRUE,'advice','replaced'),
+                linetype = ifelse(adviceonstock==TRUE,'advice',"replaced") )) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="Advice Landings Max (tonnes)") +
+  scale_color_manual(values = c("red", "blue")) +
+  scale_linetype_manual(values = c("solid", "blank")) +
+  facet_wrap(~stockkeylabelold, scales="free_y")
+
+```
+
+**Comparing perceived stock sizes with most recent estimates**
+
+Comparison of the most recent estimates of stock size from the 2018 assessments (black line) with the SSB values assumed as part of the forecasts in each of the subsequent years. The red dots refer to the most recent published advice, the blue dots refer to replaced advices, due to errors or revisions in the stock assessments.  
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+d %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, adviceonstock, ssbay) %>% 
+  rename(year = assessmentyear) %>% 
+  
+  ggplot(aes(x=year)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_point(aes(y=ssbay,
+                 colour   = ifelse(adviceonstock==TRUE,'advice','replaced'))) +
+  geom_line(data=e,
+            aes(y = stocksize )) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="SSB") +
+  scale_color_manual(values = c("red", "blue")) +
+  facet_wrap(~stockkeylabelold, scales="free_y")
+```
+
+
+
+**References**
+
+Pastoors, M.A. et al (*in prep*) Documenting the past of scientific advice: the ICES advice database. 
+
+**Advice tables**
+
+The tables below are the summaries of advice for the stocks mentioned in this paper. Most of the columns are self-explanatory. However, the columns 'purpose' and 'advice' have a specific meaning: purpose refers to the purpose of the advice, either used for advice (purpose is 'advice' and advice is TRUE) or the advice has been replaced or withdrawn (purpose is 'replaced' and advice is FALSE). The column SSB_STF refers to the SSB as estimated in the short term forecasts in the diferent years. All quantities are in tonnes, except for fishing mortality which is in 1/year. 
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+d %>% 
+  dplyr::select(stock=stockkeylabelold, assessyear=assessmentyear, purpose, fpa, fmsy, blim,
+                msybtrig=msybtrigger, ssb_stf=ssbay, tacyear, fadv=fadvmax,
+                advlandings=advisedlandingsmax)  %>% 
+  mutate(msybtrig = comma_format(big.mark ="") (msybtrig)) %>% 
+  arrange(stock, assessyear) %>% 
+  pandoc.table(., 
+             style        = "simple",
+             split.tables = 180, 
+             justify      = "right",
+             missing      =".",
+             big.mark     = '', 
+             round        = c(0,0,0,2,2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0) )
+
+
+
+```
+
+
+```{r eval=FALSE, fig.align="center", fig.asp=0.7, message=FALSE, warning=FALSE, include=FALSE}
+
+d %>% 
+  dplyr::select(stock=stockkeylabelold, assessyear=assessmentyear, purpose, fpa, fmsy, blim,
+                msybtrig=msybtrigger, ssb_stf=ssbay, tacyear, fadv=fadvmax,
+                advlandings=advisedlandingsmax)  %>% 
+  mutate(msybtrig = comma_format(big.mark ="") (msybtrig)) %>% 
+  arrange(stock, assessyear) %>% 
+  write.csv(., file="advice.csv")
+
+
+```

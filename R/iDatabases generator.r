@@ -294,6 +294,12 @@ sag <-
   # filter(row_number() == 1) %>% 
   ungroup() %>% 
   
+  # Deal with plaice in the North Sea (assessments prior to 2015 had different area allocation)
+  mutate(
+    stockkey         = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, 100103, stockkey),
+    stockkeylabel    = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, "ple-nsea2", stockkeylabel)
+  ) %>% 
+  
   # Only keep distinct rows
   distinct() %>% 
   
@@ -309,6 +315,7 @@ sag <-
   group_by(stockkey, stockkeylabel, assessmentyear, purpose, year) %>% 
   filter(row_number() == 1) %>% 
   ungroup()
+glimpse(sag)
 
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 
@@ -656,6 +663,7 @@ save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
 #   scale_y_continuous(labels = scales::scientific_format(digits=2)) +
 #   facet_wrap(~stockkeylabel, scales="free_y")
 
+# distinct(iAssess, stockkeylabel, assessmentyear) %>% filter(grepl("ple-nsea", stockkeylabel)) %>% View()
 
 # -----------------------------------------------------------------------------------------
 # load Esther's data

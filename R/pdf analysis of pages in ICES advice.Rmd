@@ -1,0 +1,158 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# PDF analysis of pages in ICES advice reports.Rmd
+#
+# 11/01/2019 first coding; 
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(pdftools)
+library(tidyverse)
+library(stringr)
+
+# captioner library
+library(captioner) # deal with captions
+fig_nums <- captioner::captioner(prefix = "Figure ", levels=1, type=c("n"))
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+
+# file path
+my.path <- "E:/ICES/advice"
+
+y <- 2018
+
+# counter for loop
+i <- 0
+
+# loop over years
+for (y in 2000:2018) {
+  
+  fl <- list.files(path=file.path(my.path, y), 
+                   pattern = "pdf$", 
+                   full.names = TRUE )
+  print(y)
+  
+  for (fn in fl) {
+    
+    if (file.exists(fn) ) {
+      # print(pdf_info(fn)[2])
+      t <- 
+        data.frame(fn=fn, year=y, npages = pdf_info(fn)[2], stringsAsFactors = FALSE) %>% 
+        mutate(
+          species = str_extract(basename(fn), "^[a-z]{3}"),
+          species = ifelse(is.na(species), "ZZZ", species)       
+        )
+      if (i == 0) {acom_pages <- t} else {acom_pages <- bind_rows(acom_pages, t)}
+      i <- i + 1
+      
+    } # end of file exists
+  } # end of file loop
+  
+  gc()
+
+} # end of y loop
+
+
+# print(wg_pages)
+
+# summarize by pentad of 5 years
+acom_pages_bypentad <-
+  acom_pages %>% 
+  group_by(year) %>% 
+  summarize(pages = sum(pages)) %>% 
+  mutate(
+    pentad = 10 / 2 * floor((year*2)/10)
+  ) %>% 
+  group_by(pentad) %>% 
+  mutate(avg = mean(pages),
+         end = pentad + 4) 
+
+
+# Figure numbers
+fig_nums(name    = "pages_byspecies", level = 1, display = FALSE,
+         caption = "Number of pages by species")
+
+fig_nums(name    = "pages_byyear", level = 1, display = FALSE,
+         caption = "Number of pages by year and averages by pentad")
+
+```
+
+
+
+**Number of pages in advice documents**
+
+M.A. Pastoors
+
+`r format(Sys.time(), '%d/%m/%Y')`
+
+Number of pages in advice document. Species have been automatically derived from the first three letters of the file name (and may not have worked flawlessly). A selection of species is shown in  
+`r fig_nums("pages_byspecies", display="cite")`. All pages by 'species' with annual averages by decade is shown in `r fig_nums("pages_byyear", display="cite")`
+
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+acom_pages %>% 
+  filter(species %in% c("ang", "cap", "cod", "eel", "had", "her", "hke", "hom", "mac", "meg", "nep",
+                        "ple", "san", "sol", "whg", "whb")) %>% 
+  ggplot(aes(x=year,y=pages)) +
+  theme_publication() +
+  theme(legend.position = "none") +
+  geom_bar(aes(fill=species), stat="identity") +
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks()) +
+  facet_wrap(~species)
+
+```
+
+*`r fig_nums("pages_byspecies")`*
+
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+acom_pages %>% 
+
+  ggplot(aes(x=year,y=pages)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  geom_bar(aes(fill=species), stat="identity") +
+  geom_segment(data=acom_pages_bypentad, aes(x=pentad, xend=end, y=avg,yend=avg), colour="black", size=2) +
+  geom_text   (data=acom_pages_bypentad, aes(x=pentad, y=avg, label=as.integer(avg)), 
+               vjust=-0.5, hjust=0) +
+  expand_limits(y=0) +
+  guides(fill = guide_legend(nrow = 8)) + 
+  scale_x_continuous(breaks=scales::pretty_breaks())
+
+
+```
+
+*`r fig_nums("pages_byyear")`*
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+acom_pages %>% 
+  group_by(year) %>% 
+  summarize(nfiles = n()) %>% 
+  
+  ggplot(aes(x=year,y=nfiles)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  geom_bar(stat="identity") +
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks())
+
+
+```

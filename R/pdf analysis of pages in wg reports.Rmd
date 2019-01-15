@@ -1,0 +1,125 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# PDF analysis of pages in WG reports.Rmd
+#
+# 11/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(pdftools)
+library(tidyverse)
+
+# captioner library
+library(captioner) # deal with captions
+fig_nums <- captioner::captioner(prefix = "Figure ", levels=1, type=c("n"))
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+
+# file path
+my.path <- "D:/ZZZ"
+
+# counter for loop
+i <- 0
+
+# loop over years
+for (wg in c("HAWG", "WGNSSK", "AFWG", "WGBFAS", "WGCSE", "WGSSDS", "WGNSDS", "WGWIDE", "WGMHSA","WGDEMPELBAL", 
+             "WGHMM", "WGBIE", "WGDEEP", "WGANSA", "WGHANSA", "WGEF", "NWWG", "WGNEW")) {
+
+  for (y in 2000:2018) {
+    
+    fn <- file.path(my.path, paste0(wg," ",y,".pdf")) 
+    # print(fn)
+    if (file.exists(fn)) {
+      # print(pdf_info(fn)[2])
+      t <- data.frame(wg=wg, year=y, npages = pdf_info(fn)[2], stringsAsFactors = FALSE)
+      if (i == 0) {wg_pages <- t} else {wg_pages <- bind_rows(wg_pages, t)}
+      i <- i + 1
+    }
+  } # end of y loop
+}  # end of wg loop
+  
+# print(wg_pages)
+
+# summarize by pentad of 5 years
+wg_pages_bypentad <-
+  wg_pages %>% 
+  group_by(year) %>% 
+  summarize(pages = sum(pages)) %>% 
+  mutate(
+    pentad = 10 / 2 * floor((year*2)/10)
+  ) %>% 
+  group_by(pentad) %>% 
+  mutate(avg = mean(pages),
+         end = pentad + 4) 
+
+
+# Figure numbers
+fig_nums(name    = "pages_bywg", level = 1, display = FALSE,
+         caption = "Number of pages by WG")
+
+fig_nums(name    = "pages_byyear", level = 1, display = FALSE,
+         caption = "Number of pages by year and averages by pentad")
+
+```
+
+
+
+**Number of pages in WG reports**
+
+M.A. Pastoors
+
+`r format(Sys.time(), '%d/%m/%Y')`
+
+Number of pages in WG reports of the following ICES working groups: `r unique(wg_pages$wg)`. 
+
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+wg_pages %>% 
+
+  ggplot(aes(x=year,y=pages)) +
+  theme_publication() +
+  theme(legend.position = "none") +
+  geom_bar(aes(fill=wg), stat="identity", colour="white", size=0.2) +
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks()) +
+  facet_wrap(~wg)
+
+```
+
+*`r fig_nums("pages_bywg")`*
+
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+wg_pages %>% 
+
+  ggplot(aes(x=year,y=pages)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  geom_bar(aes(fill=wg), stat="identity", colour="white", size=0.2) +
+  geom_segment(data=wg_pages_bypentad, aes(x=pentad, xend=end, y=avg,yend=avg), colour="black", size=2) +
+  geom_text   (data=wg_pages_bypentad, aes(x=pentad, y=avg, label=as.integer(avg)), 
+               vjust=-0.5, hjust=0) +
+  expand_limits(y=0) +
+  scale_x_continuous(breaks=scales::pretty_breaks())
+
+
+```
+
+*`r fig_nums("pages_byyear")`*
+

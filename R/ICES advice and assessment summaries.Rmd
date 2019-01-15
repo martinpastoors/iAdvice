@@ -374,7 +374,7 @@ To deal with this problem of RFID tagging, an inter-benchmark has been set up wh
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 
-s   <- "mac-nea"
+s   <- "hom-west"
 fay <- 2014; lay <- 2018
 fy  <- 2000; ly  <- 2018
 
@@ -400,7 +400,7 @@ The assessment of western horse mackerel is very uncertain and there has been fr
  
 [hom.27.2a4a5b6a7a-ce-k8.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/hom.27.2a4a5b6a7a-ce-k8.pdf)
 
-## Western horse mackerel
+## Blue whiting
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 
