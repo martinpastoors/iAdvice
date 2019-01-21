@@ -607,3 +607,11 @@ d.stockdefinitionschange %>%
   left_join(d.year, by=c("stockkeylabelold", "assessmentyear")) %>% 
   filter(!is.na(assessmentpair)) %>% 
   filter(variable == "stocksize") 
+
+
+# Checking
+
+d.jumps.byyear %>% 
+  filter(assessmentyear >= 1990) %>% 
+  ggplot(aes(x=assessmentyear, y=ratio)) +
+  geom_bar(stat="identity")

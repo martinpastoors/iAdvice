@@ -58,15 +58,6 @@ load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 d <-
   iAssess %>%
   
-  # Exclude prediction years
-  filter(year <= assessmentyear) %>% 
-  
-  # Define start year
-  filter( year >= 1980) %>%
-
-  # Only assessments with stock size in tonnes
-  filter(stocksizeunits  == "tonnes") %>%  # Note: this is filtering on absolute vs relative; but not really
-  
   # filter stocks
   filter(grepl("ple-n|her-47|mac-67|mac-nea|mac-west|cod-34|cod-nsea|whb-c|whb-n|sol-ns|hom-c|hom-w|had-3|had-n|hke-n", stockkeylabelold)) %>%
   
@@ -83,25 +74,31 @@ d <-
     stock = ifelse(grepl("hke-n",stockkeylabelold), "hke (north)",stock)
   ) %>% 
   
-  arrange(stock, purpose, desc(assessmentyear)) %>% 
+  # Exclude prediction years (but keep the benchmark information that has no year attached to it)
+  filter(is.na(year) | (year <= assessmentyear & year >= 1980) ) %>% 
+  filter(assessmentyear >= 1982) %>% 
+  filter(is.na(year) | !(is.na(stocksize) & is.na(fishingpressure))) %>% 
   
-  # filter(purpose         == "advice") %>%     
+  # Only assessments with stock size in tonnes
+  filter(is.na(year) |stocksizeunits  == "tonnes") %>%  
+  
+  # Sorting
+  arrange(stock, purpose, desc(assessmentyear)) %>% 
   
   select(assessmentyear, year, stock, stockkeylabelold, purpose, benchmark,
          stocksize, recruitment, fishingpressure) %>% 
   distinct() %>% 
   gather(key=variable, value=value, stocksize:fishingpressure) %>% 
-  filter(!is.na(value), value != 0.0)  %>% 
+  filter(is.na(year) | (!is.na(value) & value != 0.0) )  %>% 
   
   # Keep this variable
   filter( variable %in% c("stocksize")) %>% 
 
-  arrange(stock, variable, desc(assessmentyear)) %>% 
+  arrange(stock, variable, (assessmentyear)) %>% 
   ungroup() %>% 
   
   mutate(plot=ifelse(assessmentyear == max(assessmentyear), "last", "other"))
 
-distinct(iAssess, stockkeylabelold, assessmentyear, purpose, benchmark) %>% filter(grepl("ple-n", stockkeylabelold)) %>% View()
 
 # write.csv(distinct(d,stock), "temp.csv")
 
@@ -111,13 +108,16 @@ distinct(iAssess, stockkeylabelold, assessmentyear, purpose, benchmark) %>% filt
 # select data
 d.selection <-
   d %>%
-  filter(purpose == "advice") 
+  filter(purpose == "advice") %>% 
+  filter(!is.na(year))
 
 # benchmark data
 d.benchmarks <-
   d %>% 
   filter(benchmark == TRUE) %>% 
-  distinct(stock, stockkeylabelold, assessmentyear, purpose, .keep_all = FALSE) 
+  distinct(stock, stockkeylabelold, assessmentyear, .keep_all = FALSE) %>% 
+  mutate(benchmark = 1)
+
 
 # assessment data
 d.assessments <-
@@ -125,22 +125,94 @@ d.assessments <-
   distinct(stock, stockkeylabelold, assessmentyear, purpose, .keep_all = FALSE) %>% 
 
   left_join(iAdvice, by=c("stockkeylabelold","assessmentyear", "purpose")) %>%
+  select(-benchmark) %>% 
   mutate(assessmentmodel = tolower(assessmentmodel)) %>% 
   
   distinct(stock, stockkeylabelold, assessmentyear, purpose, benchmark, assessmentmodel, 
            ncpueseries, nsurveyseries, .keep_all = FALSE) %>%
   
   # determine stock definition change and model definition change
-  group_by(stock) %>% 
   arrange(stock, assessmentyear) %>% 
-  mutate(assessmentmodelchange = ifelse(assessmentmodel != lag(assessmentmodel), 1, 0),
-         assessmentmodelchange = ifelse(is.na(assessmentmodelchange), 0, assessmentmodelchange)) %>% 
+  group_by(stock) %>% 
+  mutate(
+    assessmentmodelchange = ifelse(assessmentmodel != lead(assessmentmodel), 2, 0),
+    assessmentmodelchange = ifelse(assessmentmodel != lag(assessmentmodel) , 1, assessmentmodelchange),
+    assessmentmodelchange = ifelse(assessmentmodel != lag(assessmentmodel) & 
+                                   assessmentmodel != lead(assessmentmodel), 3, assessmentmodelchange),
+
+    # add first and last year to stock definitions
+    assessmentmodelchange = 
+      case_when(
+        assessmentyear == min(assessmentyear) & assessmentmodel != lead(assessmentmodel)  ~ 3, 
+        assessmentyear == min(assessmentyear) & assessmentmodel == lead(assessmentmodel)  ~ 1,
+        assessmentyear == max(assessmentyear) & assessmentmodel != lag(assessmentmodel) ~ 3, 
+        assessmentyear == max(assessmentyear) & assessmentmodel == lag(assessmentmodel) ~ 2,
+        TRUE ~ assessmentmodelchange
+      ) 
+    ) %>% 
+  
+  # stock definition change
+  mutate(
+    stockdefinitionchange = ifelse(stockkeylabelold != lead(stockkeylabelold), 2, 0),
+    stockdefinitionchange = ifelse(stockkeylabelold != lag(stockkeylabelold), 1, stockdefinitionchange),
+    stockdefinitionchange = ifelse(is.na(stockdefinitionchange), 0, stockdefinitionchange),
+    
+    # add first and last year to stock definitions
+    stockdefinitionchange = ifelse(assessmentyear == min(assessmentyear), 1, stockdefinitionchange),
+    stockdefinitionchange = ifelse(assessmentyear == max(assessmentyear), 2, stockdefinitionchange) 
+
+  ) %>% 
+  #     ifelse(assessmentyear == min(assessmentyear), 1, stockdefinitionchange),
+  #   stockdefinitionchange = ifelse(assessmentyear == max(assessmentyear), 2, stockdefinitionchange) 
+
+  # benchmarks
+  left_join(d.benchmarks, by=c("stock", "stockkeylabelold", "assessmentyear")) %>% 
+  mutate(benchmark = ifelse(is.na(benchmark), 0, benchmark))
+
+# dataset with stock definition changes
+d.stockdefinitionchange <-
+  d.assessments %>% 
+  filter(stockdefinitionchange >= 1) %>% 
+  distinct(stock, stockkeylabelold, assessmentyear, stockdefinitionchange, .keep_all = FALSE) %>% 
+  
+  group_by(stock, stockkeylabelold) %>% 
+  summarize(tmp = paste(assessmentyear, collapse="_")) %>% 
+  separate(tmp, into=c("y1","y2"), sep="_") %>% 
+  mutate_at(c("y1","y2"), funs(as.numeric)) %>% 
+  arrange(stock, y1) %>% 
   
   group_by(stock) %>% 
-  arrange(stock, assessmentyear) %>% 
-  mutate(stockdefinitionchange = ifelse(stockkeylabelold != lag(stockkeylabelold), 1, 0),
-         stockdefinitionchange = ifelse(is.na(stockdefinitionchange), 0, stockdefinitionchange))
+  mutate(rank = as.character(row_number()))
 
+# dataset with assessment model periods
+d.assessmentmodels3 <-
+  d.assessments %>% 
+  filter(assessmentmodelchange == 3) %>% 
+  distinct(stock, assessmentyear, assessmentmodel, assessmentmodelchange, 
+           .keep_all = FALSE) %>% 
+  mutate(y1 = assessmentyear, y2 = assessmentyear+0.8) %>% 
+  ungroup() %>% 
+  select(-assessmentyear, -assessmentmodelchange)
+  
+d.assessmentmodels <-
+  d.assessments %>% 
+  filter(assessmentmodelchange %in% 1:2) %>% 
+  distinct(stock, assessmentyear, assessmentmodel, assessmentmodelchange, 
+           .keep_all = FALSE) %>% 
+  
+  group_by(stock, assessmentmodel) %>% 
+  summarize(tmp = paste(assessmentyear, collapse="_")) %>% 
+  separate(tmp, into=c("y1","y2"), sep="_") %>% 
+  mutate_at(c("y1","y2"), funs(as.numeric)) %>% 
+  mutate(y2 = y2 +0.8) %>% 
+  
+  # add the single year assessments
+  bind_rows(d.assessmentmodels3) %>% 
+  
+  arrange(stock, y1) %>% 
+  
+  group_by(stock) %>% 
+  mutate(rank = as.character(row_number()))
 
 # most recent assessments
 d.recent <-
@@ -206,8 +278,8 @@ d.mohnjonsson.bystock <-
             jonsson_asd  = sqrt(mean(jonsson_dev2)),
             mohn_rhoabs = mean(mohn_rhoabs),
             mohn_rho     = mean(mohn_rho), 
-            firstyear    = min(year),
-            lastyear     = max(year)) 
+            firstyear    = min(year, na.rm=TRUE),
+            lastyear     = max(year, na.rm=TRUE)) 
 
 
 # Calculate Ralston's retrospective measures
@@ -222,20 +294,20 @@ d.ralston <-
   filter(n() >= 2) %>% 
   
   mutate(logB     = log(value),
-         meanlogB = mean(log(value)),
+         meanlogB = mean(log(value), na.rm=TRUE),
          logBdev  = logB - meanlogB,
          logBdev2 = (logBdev)^2,
          n        = n(),
          n_1      = n - 1) %>% 
   
   # now do summing over years
-  mutate(sumlogBdev2 = sum(logBdev2) ) %>% 
+  mutate(sumlogBdev2 = sum(logBdev2), na.rm=TRUE ) %>% 
   
   # now summarize by year
   summarize(
-    meanlogBdev = mean(logBdev),
-    sumlogBdev2 = sum(logBdev2),
-    n_1         = mean(n_1), 
+    meanlogBdev = mean(logBdev, na.rm=TRUE),
+    sumlogBdev2 = sum(logBdev2, na.rm=TRUE),
+    n_1         = mean(n_1, na.rm=TRUE), 
     ralston_sigma = sqrt(sumlogBdev2/n_1)) %>% 
   
   mutate(calctype = "in_one")
@@ -251,8 +323,8 @@ d.ralston.bystock <-
   summarize(
     sumlogBdev2all = sum(sumlogBdev2),
     n_1            = sum(n_1), 
-    firstyear    = min(year),
-    lastyear     = max(year)
+    firstyear    = min(year, na.rm=TRUE),
+    lastyear     = max(year, na.rm=TRUE)
   ) %>%
   
   # calculate overall metrics
@@ -462,7 +534,7 @@ d.pairs <-
 d.last <-
   d.pairs %>% 
   select(-assessmentyearprior) %>% 
-  left_join(d, by=c("stock", "variable", "assessmentyearlast" = "assessmentyear")) %>% 
+  left_join(d.selection, by=c("stock", "variable", "assessmentyearlast" = "assessmentyear")) %>% 
   mutate(label="last") %>% 
   rename(assessmentyear = assessmentyearlast)
 
@@ -470,12 +542,23 @@ d.last <-
 d.prior <-
   d.pairs %>% 
   select(-assessmentyearlast) %>% 
-  left_join(d, by=c("stock", "variable", "assessmentyearprior" = "assessmentyear")) %>% 
+  left_join(d.selection, by=c("stock", "variable", "assessmentyearprior" = "assessmentyear")) %>% 
   mutate(label="prior") %>% 
   rename(assessmentyear = assessmentyearprior)
 
-d.jumps <-
+
+# pairwise data roughly
+d.pairwise.roughly <-
   bind_rows(d.last, d.prior) %>% 
+  group_by(stock, assessmentpair, variable) %>% 
+  
+  # filter the appropriate period
+  filter(year <= max(assessmentyear) - removelastyears,
+         year >= max(assessmentyear) - removelastyears - numberofyears -5) 
+
+# pairwise data
+d.pairwise <-
+  d.pairwise.roughly %>% 
   group_by(stock, assessmentpair, variable) %>% 
   
   # filter the appropriate period
@@ -488,7 +571,11 @@ d.jumps <-
   # filter only years that are in common in last and prior
   group_by(stock, assessmentpair, variable, year) %>% 
   mutate(n = n()) %>% 
-  filter(n() == 2) %>% 
+  filter(n() == 2) 
+  
+
+d.jumps <-
+  d.pairwise %>% 
   
   # calculate means per period
   group_by(stock, assessmentpair, variable) %>% 
@@ -536,6 +623,15 @@ d.jumps.bydecade <-
          ratio2       = percent_format(accuracy=1) (n2/n),
          ratio3       = paste(ratio2," (", n, ")", sep="") ) 
 
+# jumps by year
+d.jumps.byyear <-
+  d.jumps %>% 
+  group_by(variable, assessmentyear) %>% 
+  summarise(n         = n(),
+            n2        = sum(phi_abs > 0.1, na.rm=TRUE)) %>% 
+  mutate(ratio = n2 / n )
+
+            
 # update d.metrics_bystock
 d.metrics_bystock2 <-
   bind_rows(d.mohnjonsson.bystock, d.ralston.bystock) %>% 
@@ -649,8 +745,11 @@ fig_nums(name    = "retrometrics2", level = 2, display = FALSE,
 tab_nums(name    = "scalejumps", level = 1, display = FALSE, 
          caption = "Percentage assessments with scale jumps of more than 10% expressed by decade. Between brackets: number of assessments within the decade.")
 
-fig_nums(name    = "scalejumps", level = 1, display = FALSE, 
-         caption = "Retrospective scale difference (sigma) for 9 species derived from historical assessment records. Results from pairwise comparisons over periods of 8 years. Large dots  refer to years when the scale difference is larger than 10%. Numbers at the bottom left of each panel refer to the number of assessments with a scale difference larger than 10% relative to the total number of assessments available for that stock. Colours indicate the decades. Black triangles and dashed lines indicate benchmark assessment years. Red triangles and dashed lines indicate years when assessment models were changed compared to the year before")
+fig_nums(name    = "scalecomparisons", level = 1, display = FALSE, 
+         caption = "Example of pairwise assessment comparisons for Northeast Atlantic mackerel  over a period of 10 years in common. The dotted lines indicate the average values of the different assessments which are used to calculate scale differences between assessments.")
+
+fig_nums(name    = "scalejumps", level = 2, display = FALSE, 
+         caption = "Retrospective scale difference (sigma) for 9 species derived from historical assessment records. Results from pairwise comparisons over periods of 10 years. Large dots  refer to years when the scale difference is larger than 10%. Colours indicate the decades. Black triangles indicate benchmark assessment years. The bottom part of the panels shows the assessment methods being deployed, the upper part of the panels the stock definitions.")
 
 fig_nums(name    = "metricsinpeels", level = 2, display = FALSE, 
          caption = "Comparison of retrospective uncertainty metrics from historical assessment records, calculated in peels, normalized between 0 and 1. Asd from Jonsson & Hjorleifsson 2000, rhoabs as absolute value of rho from Mohn 1999, sigma from Ralston et al 2011, percjumps as the percentage of jumps (this paper) and phiabs as the absolute value of phi (this paper).")
@@ -659,6 +758,15 @@ fig_nums(name    = "metricsinpeels", level = 2, display = FALSE,
 
 fig_nums(name    = "stockdefchange", level = 1, display = FALSE, 
          caption = "Comparisons of assessments (SSB) where stock definitions changed. Green is old stock definition, red is new stock definition")
+
+fig_nums(name    = "jumpratio", level = 2, display = FALSE, 
+         caption = "Ratio of scale-jumps in assessment relative to the number of assessment by year.")
+
+getPalettePurples         <- colorRampPalette(brewer.pal(7, "Purples")[-(1:2)])
+myPurples                 <- getPalettePurples(10)
+
+getPaletteBlues         <- colorRampPalette(brewer.pal(7, "Blues")[-(1:2)])
+myBlues                 <- getPaletteBlues(10)
 
 ```
 
@@ -859,6 +967,78 @@ d.metrics_bystock %>%
 #####Page break
 
 <!-- ################################################################################## -->
+<!-- Plot pairwise comparisons                                                          -->
+<!-- ################################################################################## -->
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+myvar     <- "stocksize"
+myspecies <- "mac"
+firstyear <- 1991
+
+d.pairwise.means <-
+  
+  d.pairwise %>% 
+  
+  filter(variable == myvar) %>% 
+  filter(grepl(myspecies, stockkeylabelold)) %>% 
+  filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
+  
+  # calculate means per period
+  group_by(stock, assessmentpair, variable) %>% 
+  mutate(   firstyear      = min(year),
+            lastyear       = max(year)) %>% 
+  group_by(stock, assessmentpair, variable, assessmentyear, label, firstyear, lastyear) %>% 
+  summarise(value = mean(value, na.rm=TRUE)) %>% 
+  gather(key=tmp, value=year, firstyear:lastyear) %>% 
+  arrange(stock, assessmentpair, variable, assessmentyear, label) 
+
+d.pairwise %>% 
+  
+  filter(variable == myvar) %>% 
+  filter(grepl(myspecies, stockkeylabelold)) %>% 
+  filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
+  
+  ggplot(aes(x=year, y=value, group=assessmentyear)) +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(1,0,0,0, "mm")),
+    strip.text.y     = element_text(angle = 0),
+   # axis.text.x      = element_text(angle = 90, vjust = 0.5), 
+    legend.position  = "none"
+  ) +  
+  
+  geom_line(data=filter(d.pairwise.roughly, 
+                        variable == myvar, 
+                        grepl(myspecies, stockkeylabelold),
+                        as.numeric(substr(assessmentpair,1,4)) >= firstyear), size=0.5) +
+  
+  geom_line(aes(colour=factor(label)), size=1) +
+
+  geom_line(data=d.pairwise.means, aes(x=year, y=value, colour=factor(label)), 
+            linetype="dashed", lineend="butt") +
+  geom_point(data=filter(d.pairwise.means, year==min(year)),
+             aes(colour=factor(label)), size=1) +
+  geom_point(data=filter(d.pairwise.means, year==max(year)),
+             aes(colour=factor(label)), size=1) +
+  
+  scale_y_continuous(breaks = pretty_breaks(n=3), labels=scientific_format(digits=1)) +
+  scale_x_continuous(breaks = pretty_breaks(n=2)) +
+  expand_limits(y=0) +
+  labs(x="", y="ssb (tonnes)") +
+  facet_wrap( ~ assessmentpair, scales = "free_x", ncol=5)
+
+```
+
+*`r fig_nums("scalecomparisons")`*
+
+
+#####Page break
+
+<!-- ################################################################################## -->
 <!-- Plot scale jumps                                                                   -->
 <!-- ################################################################################## -->
 
@@ -872,7 +1052,7 @@ d.jumps %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
   
-  ggplot(aes(x=assessmentyear, y=value)) +
+  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
   theme_publication() +
   theme(
     panel.spacing    = unit(0.1, "lines"),
@@ -884,34 +1064,36 @@ d.jumps %>%
     legend.position  = "none"
   ) +
   
+  geom_rect(data=filter(d.stockdefinitionchange),
+            aes(xmin = y1, xmax=y2, ymin = -1.0, ymax=1.0, fill=rank), 
+            alpha=0.4, colour=myPurples[6], inherit.aes = FALSE) +
+  
+  geom_dl(data=filter(d.stockdefinitionchange),
+          aes(label  = stockkeylabelold, x = y1, y = -0.95),
+          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=0.0, vjust=0.9),
+          inherit.aes = FALSE, colour=brewer.pal(6, "Purples")[6]) +
+  
   geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
   geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
   geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
   
-  # geom_point(data=d.benchmarks, 
-  #            aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
-  
-  # geom_point(data=d.assessmentmodelchange, 
-  #            aes(x=assessmentyear-0.1, y=-1.0), colour="red", fill="red", shape=24, size=2) +
-  
-  # geom_segment(data=d.benchmarks, 
-  #              aes(x=assessmentyear+0.1, xend=assessmentyear+0.1, y=-1.0, yend=1.0), 
-  #              colour="gray20", size=0.5, linetype="dashed") +
-  
-  # geom_segment(data=d.assessmentmodelchange, 
-  #              aes(x=assessmentyear-0.1, xend=assessmentyear-0.1, y=-1.0, yend=1.0), 
-  #              colour="red", size=0.5, linetype="dashed") +
-  
   geom_line (aes(colour=factor(decade))) +
   geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
   
-  # geom_text(data=filter(d.scale, variable == myvar), 
-  #           aes(label=ratio),  
-  #           x=-Inf, y=-Inf, hjust=-0.2, vjust=-0.8, inherit.aes=FALSE) +
+  geom_point(data=filter(d.assessments, benchmark == 1),
+            aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
   
-  coord_cartesian(ylim=c(-1, 1)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  geom_point(data=filter(d.assessments, assessmentmodelchange == 1),
+            aes(x=assessmentyear-0.1, y=-1.0), colour="red", fill="red", shape=24, size=2) +
+  
+  coord_cartesian(ylim=c(-1, 1),
+                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  
+  scale_fill_manual(values = brewer.pal(6, "Purples")[-(1:2)]) +
+        
   scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
-  scale_x_continuous(breaks = pretty_breaks(), limits=c(1982, NA)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  
   labs(x=" ", y="") +
   facet_wrap(~stock)
 
@@ -919,6 +1101,129 @@ d.jumps %>%
 ```
 
 *`r fig_nums("scalejumps")`*
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+
+
+# plot scale jumps between assessments vs assessment methods
+
+d.jumps %>% 
+  distinct(stock, variable, assessmentyear, phi) %>%
+  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
+  gather(key=metric, value=value, c(phi)) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_rect(data=filter(d.assessmentmodels),
+            aes(xmin = y1, xmax=y2, ymin = -1.0, ymax=1.0, fill=rank), 
+            alpha=0.4, colour=myBlues[6], inherit.aes = FALSE) +
+  
+  geom_dl(data=filter(d.assessmentmodels),
+          aes(label  = assessmentmodel, x = y1, y = -0.95),
+          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=0.0, vjust=0.9),
+          inherit.aes = FALSE, colour=myBlues[6]) +
+  
+  geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
+  
+  geom_line (aes(colour=factor(decade))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
+  
+  geom_point(data=filter(d.assessments, benchmark == 1),
+            aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
+  
+  coord_cartesian(ylim=c(-1, 1),
+                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  
+  scale_fill_manual(values = myBlues) +
+        
+  scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  
+  labs(x=" ", y="") +
+  facet_wrap(~stock)
+
+
+```
+
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+
+
+# plot scale jumps between assessments vs assessment methods
+
+d.jumps %>% 
+  distinct(stock, variable, assessmentyear, phi) %>%
+  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
+  gather(key=metric, value=value, c(phi)) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_rect(data=filter(d.stockdefinitionchange),
+            aes(xmin = y1, xmax=y2, ymin = 0.00, ymax=1.0), 
+            alpha=0.4, fill=myPurples[6], colour=myPurples[6], inherit.aes = FALSE) +
+  
+  geom_dl(data=filter(d.stockdefinitionchange),
+          aes(label  = stockkeylabelold, x = y1, y = 0.95),
+          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=1.0, vjust=0.9),
+          inherit.aes = FALSE, colour=brewer.pal(6, "Purples")[6]) +
+  
+
+  geom_rect(data=filter(d.assessmentmodels),
+            aes(xmin = y1, xmax=y2, ymin = -1.0, ymax=0.0, fill=rank), 
+            alpha=0.4, colour=myBlues[6], inherit.aes = FALSE) +
+  
+  geom_dl(data=filter(d.assessmentmodels),
+          aes(label  = assessmentmodel, x = y1, y = -0.95),
+          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=0.0, vjust=0.9),
+          inherit.aes = FALSE, colour=myBlues[6]) +
+  
+  geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
+  
+  geom_line (aes(colour=factor(decade))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
+  
+  geom_point(data=filter(d.assessments, benchmark == 1),
+            aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
+  
+  coord_cartesian(ylim=c(-1, 1),
+                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  
+  scale_fill_manual(values = myBlues) +
+        
+  scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  
+  labs(x=" ", y="") +
+  facet_wrap(~stock)
+
+
+```
 
 <!-- ################################################################################## -->
 <!-- COmpare all metrics in peels                                                       -->
@@ -1016,3 +1321,36 @@ t3 %>%
 ```
 
 *`r fig_nums("stockdefchange")`*
+
+
+  
+<!-- ################################################################################## -->
+<!-- COmpare the number of scale jumps (as ratio) over time                             -->
+<!-- ################################################################################## -->
+
+```{r jumpratio, echo=FALSE, fig.asp=0.5, fig.align="center", message=FALSE, warning=FALSE}
+
+
+d.jumps.byyear %>% 
+  filter(assessmentyear >= 1990) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=ratio)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(size=8, face="bold", hjust=1, margin = margin(2,0,2,0, "mm")),
+    strip.placement = "outside",
+    legend.title    = element_blank(),
+    legend.position  = "none"
+  ) +
+  geom_bar(stat="identity") +
+  labs(x="", y="ratio") 
+
+
+
+```
+
+
+*`r fig_nums("jumpratio")`*

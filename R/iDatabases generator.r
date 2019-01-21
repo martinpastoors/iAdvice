@@ -192,22 +192,6 @@ qcsexcel <-
   
 save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 
-# qcsexcel %>% 
-#   filter(grepl("cod-347d", stockkeylabelold)) %>% 
-#   filter(year >= 2000) %>% 
-#   select(stockkeylabelold, assessmentyear, year, stocksize) %>% 
-#   spread(key=year, value=stocksize) %>% 
-#   arrange(desc(assessmentyear)) %>% 
-#   View()
-
-# glimpse(qcsexcel)
-# unique(qcsexcel$assessmentdate)
-# qcsexcel %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
-# qcsexcel %>% filter(is.na(stockkey)) %>% View()
-# qcsexcel %>% filter(!is.na(assessmentdate.x) & !is.na(assessmentdate.y) & assessmentdate.x != assessmentdate.y) %>% View()
-# iAdvice %>% filter(stockkey == 169048) %>% View()
-# iAdvice %>% filter(is.na(speciesfaocode)) %>% View()
-
 
 # -----------------------------------------------------------------------------------------
 # load Stock Database 
@@ -221,19 +205,6 @@ sd <-
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   left_join(iStockkey, by="stockkey") %>% 
   rename(assessmentyear = activeyear) 
-
-# sd %>% 
-#   filter(stockkeylabel %in% c("cod.27.24-32","pra.27.3a4a","mon.27.78abd","rjn.27.678abd")) %>% 
-#   distinct(stockkey, stockkeylabel) %>% 
-#   View()
-# 
-# sd %>% 
-#   filter(grepl("mon.27.78abd", stockkeylabel)) %>% 
-#   View()
-# 
-# sd %>% 
-#   filter(grepl("smn-grl",stockkeylabel)) %>% 
-#   View()
 
 
 # -----------------------------------------------------------------------------------------
@@ -314,84 +285,13 @@ sag <-
   # remove duplicate assessments (Careful!)
   group_by(stockkey, stockkeylabel, assessmentyear, purpose, year) %>% 
   filter(row_number() == 1) %>% 
-  ungroup()
-glimpse(sag)
+  ungroup() %>% 
+  
+  # remove all the custom fiels (for now)
+  select(-starts_with('custom'))
 
 save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 
-
-
-# sag_without_currentyear <-
-#   sag %>% 
-#   filter(purpose == "advice") %>% 
-#   distinct(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear, year, .keep_all = FALSE) %>%
-#   group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear) %>% 
-#   filter(max(year) < assessmentyear) %>% 
-#   distinct(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear, .keep_all = FALSE) %>% 
-#   
-#   # now couple with iAdvice
-#   left_join(iAdvice, 
-#             by=c("stockkey","stockkeylabel","stockkeylabelnew","stockkeylabelold","purpose","assessmentyear")) %>% 
-#   filter(!is.na(ssbay)) 
-  
-
-# glimpse(sag)
-# sag %>% distinct(purpose) %>% View()
-# sag %>% distinct(published) %>% View()
-# sag %>% distinct(purpose, published) %>% View()
-# sort(unique(sag$stockkeylabel))
-
-# get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
-#   lowcase() %>% 
-#   mutate_at(c("year","stocksize"), funs(as.numeric)) %>% 
-#   filter(grepl("had-346a", stockkeylabel)) %>%
-#   filter(assessmentyear == 2014) %>%
-#   filter(tolower(purpose)=="advice") %>%
-#   
-#   ggplot(aes(x=year,y=stocksize, group=assessmentkey)) +
-#   theme_publication() +
-#   geom_line(aes(colour=factor(assessmentkey)))
-
-# How many double assessments in SAG?
-
-# sag_doubles <-
-#   get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>%
-#   mutate_at(c("stocksize"), funs(as.numeric)) %>%
-#   mutate_at(c("purpose"), funs(tolower)) %>%
-#   mutate_at(c("stockkey", "assessmentyear", "year"), funs(as.integer)) %>%
-# 
-#   distinct(assessmentkey, stockkey, stockkeylabel, purpose, assessmentyear, .keep_all = FALSE) %>%
-#   group_by(stockkey, stockkeylabel, purpose, assessmentyear) %>%
-#   filter(n() > 1) %>%
-#   ungroup() %>%
-#   arrange(stockkeylabel, stockkey, purpose, assessmentyear) %>%
-#   select (stockkeylabel, stockkey, purpose, assessmentyear, assessmentkey )
-
-# t <-
-#   get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
-#   mutate_at(c("stocksize"), funs(as.numeric)) %>% 
-#   mutate_at(c("purpose"), funs(tolower)) %>% 
-#   mutate_at(c("stockkey", "assessmentyear", "year"), funs(as.integer)) 
-  
-# sag_doubles %>% 
-#   left_join(t, 
-#             by=c("assessmentkey", "stockkey", "stockkeylabel", "purpose", "assessmentyear")) %>% 
-#   mutate(label = paste(stockkeylabel, assessmentyear, sep=" ")) %>% 
-#   
-#   ggplot(aes(x=year,y=stocksize, group=assessmentkey)) +
-#   theme_publication() +
-#   theme(legend.position="none") +
-#   geom_line(aes(colour=factor(assessmentkey))) +
-#   facet_wrap(~label, scales="free_y")
-
-# sag %>%
-#   filter(grepl("cod-347d", stockkeylabelold)) %>%
-#   filter(year >= 2010) %>%
-#   filter(purpose=="advice") %>% 
-#   select(stockkeylabelold, assessmentyear, year, stocksize) %>%
-#   spread(key=year, value=stocksize) %>%
-#   arrange(desc(assessmentyear)) %>%
-#   View()
 
 # -----------------------------------------------------------------------------------------
 # load SAG reference points (see: DownloadDataFromSAG.r)
@@ -411,26 +311,6 @@ sagrefpoints <-
 save(sagrefpoints, file=paste(advicedir, "/rdata/iSAGrefpoints.RData",sep=""))
 
 # sagrefpoints %>% filter(grepl("her"))
-
-# -----------------------------------------------------------------------------------------
-# load the allocation mechanism (needs to be integrated into Advice spreadsheet?)
-# -----------------------------------------------------------------------------------------
-
-# iAlloc <-
-#   readxl::read_excel(
-#     path= paste(advicedir, "/Excel/iAlloc.xlsx", sep=""), 
-#     col_names = TRUE, 
-#     col_types = "text", 
-#     trim_ws   = FALSE) %>%
-#   lowcase() %>% 
-#   mutate_at(c("stockkey"), funs(as.integer))
-
-
-# -----------------------------------------------------------------------------------------
-# load the STECF Fisheries Management Zones
-# -----------------------------------------------------------------------------------------
-
-# load(file=paste(advicedir, "/rdata/STECF sframe.RData",sep="")) 
 
 
 # -----------------------------------------------------------------------------------------
@@ -478,37 +358,36 @@ only_in_sag <-
 # -----------------------------------------------------------------------------------------
 
 # sag
-t1 <-
+sag_to_merge <-
   bind_rows(incommon, only_in_sag) %>% 
   left_join(sag, by=c("stockkey","stockkeylabel", "stockkeylabelold", "stockkeylabelnew", "assessmentyear", "purpose")) %>% 
   mutate(source = "sag")
 
 # qcs
-t2 <-
+qcsexcel_to_merge <-
   only_in_qcsexcel %>% 
   left_join(qcsexcel, by=c("stockkey","stockkeylabel", "stockkeylabelold", "stockkeylabelnew", "assessmentyear","purpose")) %>% 
-  dplyr::select(one_of(names(t1))) %>% 
+  dplyr::select(one_of(names(sag_to_merge))) %>% 
   mutate(source = tolower(source))
 
 # iAdvice (only model specifications)
-t3 <-
+iadvice_to_merge <-
   iAdvice %>% 
   dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose, 
-                stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, adviceonstock, published) %>% 
+                stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, 
+                adviceonstock, published) %>% 
   mutate_at(c("assessmentmodel"), funs(tolower))
 
 
 # generate iAssess
 iAssess <-
   
-  bind_rows(t1, t2) %>% 
-  full_join(t3, by=c("stockkey", "stockkeylabel", "stockkeylabelold", 
+  bind_rows(sag_to_merge, qcsexcel_to_merge) %>% 
+  
+  # add information from iAdvice and add source if not already existing
+  full_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold", 
                      "stockkeylabelnew", "assessmentyear","purpose")) %>% 
-  
-  # group_by(stockkeylabelold, assessmentyear, purpose) %>% 
-  
-  # Exclude prediction years
-  # filter(year <= max(assessmentyear, na.rm=TRUE)) %>% 
+  mutate(source = ifelse(is.na(source), "iadvice", source)) %>% 
   
   # descriptions and units to lowercase
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
@@ -582,134 +461,10 @@ iAssess <-
   
   # Handle published and assessmentscale
   mutate(published = ifelse(is.na(published.x), published.y, published.x)) %>% 
-  select(-published.x, -published.y)
+  select(-published.x, -published.y) %>% 
+  
+  # sorting
+  arrange(speciesfaocode, stockkey, assessmentyear, purpose)
 
 save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
-
-# iAssess %>%
-#   filter(grepl("cod-347d", stockkeylabelold)) %>%
-#   filter(year >= 2010) %>%
-#   filter(purpose=="advice") %>%
-#   select(stockkeylabelold, assessmentyear, year, stocksize) %>%
-#   spread(key=year, value=stocksize) %>%
-#   arrange(desc(assessmentyear)) %>%
-#   View()
-
-# iAssess %>% filter(is.na(speciesfaocode)) %>% distinct(stockkeylabel, assessmentyear) %>%  View()
-
-# iAssess %>% distinct(recruitmentdescription) %>%  View()
-# iAssess %>% distinct(unitofrecruitment) %>%  View()
-# iAssess %>% filter(is.na(unitofrecruitment) & !is.na(recruitment)) %>% View()
-# 
-# iAssess %>% distinct(stocksizedescription) %>%  arrange(stocksizedescription) %>% View()
-# iAssess %>% distinct(stocksizeunits) %>%  View()
-# iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
-# iAssess %>% filter(stocksizedescription == "biomass indices") %>% View()
-
-# iAssess %>% filter(fishingpressureunits == "harvest rate") %>% View()
-# iAssess %>% filter(fishingpressuredescription == "fproxy") %>% View()
-# iAssess %>% distinct(fishingpressuredescription, fishingpressureunits, source) %>% arrange(fishingpressuredescription) %>% View()
-# iAssess %>% 
-#   filter(grepl("harvest rate|hr", fishingpressuredescription) | 
-#          grepl("harvest rate|hr", fishingpressuredescription)) %>% 
-#   distinct(fishingpressuredescription, fishingpressureunits, source) %>% 
-#   View()
-
-# iAssess %>% 
-#   filter(grepl("relative hr", fishingpressuredescription) ) %>% 
-#   distinct(fishingpressuredescription, fishingpressureunits, source, stockkeylabel, assessmentyear) %>% 
-#   View()
-
-# iAssess %>% distinct(catcheslandingsunits) %>%  View()
-
-# iAssess %>% filter(stockkeylabelold == "hke-nrtn", assessmentyear == 2000) %>% View()
-
-
-# iAssess %>% distinct(fishingpressuredescription)  %>% View()
-# iAssess %>% filter(is.na(fishingpressure) & !is.na(fishingpressuredescription)) %>% View()
-# iAssess %>% filter(grepl("fishing pressure", fishingpressuredescription)) %>% View()
-# iAssess %>% filter(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription)) %>% View()
-
-# iAssess %>% distinct(fishingpressureunits) %>%  View()
-
-# iAssess %>% filter(is.na(fishingpressureunits) & !is.na(fishingpressuredescription)) %>% View()
-# iAssess %>% 
-#   filter(is.na(fishingpressureunits) & !is.na(fishingpressuredescription)) %>% 
-#   distinct(stockkeylabel, assessmentyear, fishingpressuredescription, fishingpressureunits) %>% 
-#   arrange(fishingpressuredescription) %>% 
-#   View()
-
-# iAssess %>% 
-#   distinct(stockkey, stockkeylabelold, assessmentyear, purpose, stocksizedescription) %>% 
-#   group_by(stocksizedescription) %>% 
-#   summarize(n=n()) %>% 
-#   View()
- 
-# iAssess %>% filter(stocksizeunits == "thousand tonnes") %>% View()
-# iAssess %>% filter(catcheslandingsunits == "t") %>% View()
-# iAssess %>% filter(stocksizeunits == "select units" & !is.na(stocksize)) %>% View()
-# iAssess %>% filter(is.na(stocksizeunits) & !is.na(stocksize)) %>% View()
-# 
-# iAssess %>% filter(year == 2016, purpose == "replace") %>% View()
-
-# iAssess %>%
-#   filter(stocksizeunits == "tonnes") %>%
-#   # filter(stocksize > 1000000) %>% 
-#   # filter(stockkeylabelold == "san-nsea") %>% 
-#   ggplot(aes(x=year, y=stocksize, group=assessmentyear)) +
-#   theme_publication() +
-#   geom_line() +
-#   expand_limits(y=0) +
-#   scale_y_continuous(labels = scales::scientific_format(digits=2)) +
-#   facet_wrap(~stockkeylabel, scales="free_y")
-
-# distinct(iAssess, stockkeylabel, assessmentyear) %>% filter(grepl("ple-nsea", stockkeylabel)) %>% View()
-
-# -----------------------------------------------------------------------------------------
-# load Esther's data
-# -----------------------------------------------------------------------------------------
-
-# esther <-
-#   readxl::read_excel(
-#     path= paste(advicedir, "/excel/Data_Esther.xlsx", sep=""), 
-#     sheet     = "Data_Esther",
-#     col_names = TRUE, 
-#     col_types = "text", 
-#     trim_ws   = FALSE) %>%
-#   lowcase() %>% 
-#   select(
-#     stockkeylabelold = fishstock,
-#     assessmentyear   = assyear,
-#     assessmentmodel  = assmodel,
-#     purpose          = asstype,
-#     year,
-#     stocksize        = ssb,
-#     fishingpressure  = f,
-#     recruitment,
-#     fpa, flim, fmsy,
-#     blim, bpa, msybtrigger,
-#     overfishing, overfished
-#   ) %>% 
-  
-# remove nephrops and rays for now
-# filter(tolower(substr(stockkeylabelold,1,3)) != "nep") %>% 
-# filter(tolower(substr(stockkeylabelold,1,3)) != "raj") %>% 
-# filter(tolower(substr(stockkeylabelold,1,2)) != "rj") %>% 
-  
-# make numeric
-# mutate_at(c("assessmentyear","year", "recruitment","stocksize","fishingpressure",
-#             "flim","fpa","fmsy","blim","bpa", "msybtrigger", "overfishing", "overfished"),   
-#           funs(as.numeric)) %>% 
-  
-# make lowercase
-# mutate_at(c("assessmentmodel", "purpose"), funs(tolower)) %>% 
-
-# distinct rows only
-# distinct() 
-
-
-# iAssess %>% 
-#   filter(fishingpressuredescription == "f" & is.na(fishingpressureunits)) %>% 
-#   View()
-
 
