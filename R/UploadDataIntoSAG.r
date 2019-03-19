@@ -40,6 +40,9 @@ stockkeylabel  <- "her.27.3a47d"
 assessmentyear <- 2019
 contactperson  <- "benoit.berges@wur.nl"
 
+# SSB in intermediate year 
+SSBint <- 1529000
+
 # Create the input data for uploading  
 info     <- stockInfo(
   StockCode      = stockkeylabel, 
@@ -84,7 +87,7 @@ fishdata$Recruitment              <- rec(STK.sam)$value
 fishdata$High_Recruitment[1:nyrs] <- rec(STK.sam)$ubnd[1:nyrs] 
 
 fishdata$Low_StockSize[1:nyrs]    <- ssb(STK.sam)$lbnd[1:nyrs]
-fishdata$StockSize                <- ssb(STK.sam)$value
+fishdata$StockSize                <- c(ssb(STK.sam)$value[1:nyrs], SSBint)
 fishdata$High_StockSize[1:nyrs]   <- ssb(STK.sam)$ubnd[1:nyrs]
 
 fishdata$Low_TBiomass[1:nyrs]     <- tsb(STK.sam)$lbnd[1:nyrs]
@@ -93,7 +96,7 @@ fishdata$High_TBiomass[1:nyrs]    <- tsb(STK.sam)$ubnd[1:nyrs]
 
 fishdata$Low_FishingPressure[1:nyrs] <- fbar(STK.sam)$lbnd[1:nyrs]
 fishdata$FishingPressure             <- fbar(STK.sam)$value
-fishdata$FishingPressure[1:nyrs]     <- fbar(STK.sam)$ubnd[1:nyrs]
+fishdata$High_FishingPressure[1:nyrs]<- fbar(STK.sam)$ubnd[1:nyrs]
 
 fishdata$CustomSeries1[1:nyrs]    <- catch(STK.sam)$value[1:nyrs]
 fishdata$CustomSeries2[1:nyrs]    <- catch(STK.sam)$lbnd[1:nyrs]
