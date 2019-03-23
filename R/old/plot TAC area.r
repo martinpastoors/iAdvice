@@ -31,53 +31,53 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 # set world in sf format
 # ----------------------------------------------------------------------------------------------------------
 
-world1 <- sf::st_as_sf(map('world', plot = FALSE, fill = TRUE, 
+world_sf <- sf::st_as_sf(map('world', plot = FALSE, fill = TRUE, 
                            regions = c("netherlands","belgium","France(?!:Corsica)",
                                        "ireland","united kingdom", "UK", "Denmark","Germany",
                                        "norway","iceland", "greenland", "faroe islands", "spain","portugal",
                                        "sweden", "finland","poland")))
-# ggplot(data=world1) + geom_sf()
+# ggplot(data=world_sf) + geom_sf()
 
 
 # ----------------------------------------------------------------------------------------------------------
 # load the iAdvice data
 # ----------------------------------------------------------------------------------------------------------
 
-load(file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
-load(file.path(advicedir,"rdata/fao_iho.RData"))
-
-fao_iho %>% filter(grepl("27.2.a", name)) %>% View()
-
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+load(file.path(dropboxdir,"rdata/fao_iho.RData"))
 
 # ----------------------------------------------------------------------------------------------------------
-# generate the stk object: stock, assessmentyear and area(s) 
+# generate the tac object: stock, assessmentyear and area(s) 
 # ----------------------------------------------------------------------------------------------------------
-
 
 tac <-
   iAdvice %>% 
   
-  filter(speciesfaocode == "ple") %>%
-  filter(grepl("27.2|27.3|27.4", tacarea)) %>% 
+  # filter(speciesfaocode == "ple") %>%
+  # filter(grepl("27.2|27.3|27.4", tacarea)) %>% 
+  
+  filter(speciesfaocode == "her") %>%
+  filter(grepl("27.1", tacarea)) %>% 
+  
   filter(assessmentyear %in% 2010:2018) %>%
   distinct(fishstock = stockkeylabelold, stockkey, assessmentyear, tacarea) %>%
-  mutate(toupper(tacarea)) %>% 
+  mutate(tacarea = toupper(tacarea)) %>% 
   
   # make "area" into a long table
   separate(tacarea, c(paste0("x",1:50)), sep = ";") %>%
-  gather(key=dummy, value=name, -fishstock, -assessmentyear, -stockkey) %>%
+  gather(key=dummy, value=variable, -fishstock, -assessmentyear, -stockkey) %>%
   drop_na() %>%
   select(-dummy) %>%
   mutate(species = stringr::str_sub(fishstock, 1, 3)) %>% 
   
   # link to the link table to get name of geometry
-  left_join(fao_iho, by="name") %>%
+  left_join(fao_eez_sf, by="variable") %>%
   
   # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
   st_sf() %>%
   
   # join areas together by stock and assessmentyear
-  group_by(fishstock, assessmentyear) %>%
+  group_by(fishstock, variable, assessmentyear) %>%
   summarise()
 
 
@@ -88,6 +88,9 @@ tac <-
 # ----------------------------------------------------------------------------------------------------------
 # generate plot
 # ----------------------------------------------------------------------------------------------------------
+
+w <-
+  st_intersection(world_sf, st_as_sfc(st_bbox(tac)))
 
 tac %>%
   
@@ -102,9 +105,9 @@ tac %>%
         legend.title     = element_blank()) +
   
   theme(legend.title=element_blank()) +
-  geom_sf(data=world1, inherit.aes = FALSE, fill="gray90") +
-  geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour=NA) +
-  coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
+  geom_sf(data=w, inherit.aes = FALSE, fill="gray90") +
+  geom_sf(aes(fill = factor(variable)), alpha=0.6, colour=NA) +
+  # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
   ggmisc::scale_fill_crayola() +
   facet_wrap(~assessmentyear)
 # facet_grid(fishstock~assessmentyear)

@@ -50,11 +50,14 @@ d <-
   # filter(grepl("ple-nsea", stockkeylabelold) ) %>% 
   # filter(grepl("cod-347d", stockkeylabelold) ) %>% 
   
-  # filter(grepl("spr-nsea", stockkeylabelold) | grepl("spr.27.3a4", stockkeylabelnew) ) %>%
-  # mutate(stockkeylabelold = "spr.27.3a4") %>% 
+  filter(grepl("spr-nsea", stockkeylabelold) | grepl("spr.27.3a4", stockkeylabelnew) ) %>%
+  mutate(stockkeylabelold = "spr.27.3a4") %>% 
+  filter(assessmentyear >= 2015) %>% 
+  mutate(recruitment = ifelse(year == assessmentyear, NA, recruitment)) %>% 
   
   # filter(grepl("her-3a22", stockkeylabelold) ) %>% 
-  filter(grepl("her-47d3", stockkeylabelold) ) %>% 
+  # filter(grepl("her-47d3", stockkeylabelold) ) %>% 
+  # filter(grepl("her-nirs", stockkeylabelold) ) %>% 
   # filter(grepl("hom-west", stockkeylabelold) ) %>% 
   
   # filter(grepl("mac-nea|hom-west|whb-comb|her-noss", stockkeylabelold) ) %>% 
@@ -66,7 +69,9 @@ d <-
   # filter(year             >  2000) %>%  
   # filter(year             <= assessmentyear) %>% 
   # filter(assessmentyear   >  1980) %>% 
-  filter(assessmentyear   >  2017) %>% 
+  filter(assessmentyear   >  2012) %>% 
+  
+  filter(purpose %in% c("advice", "update")) %>% 
   
   select(assessmentyear, year, stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew,
          purpose, 
@@ -131,7 +136,8 @@ p1 <-
   filter(!is.na(stocksize)) %>%  
   # filter(grepl("2016", tyear)) %>% 
   # filter(purpose == "withdrawn") %>% 
-  
+  # View()
+
   ggplot(aes(year,stocksize, group=paste0(tyear,purpose))) +
   
   theme_publication() +
@@ -142,15 +148,15 @@ p1 <-
         # strip.background = element_blank(),
         legend.position = "null") +
   
-  geom_ribbon(aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
+  # geom_ribbon(aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   # geom_ribbon(data=last, aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   # geom_ribbon(data=withdrawn, aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
   
-  geom_dl(aes(label  = tyear, colour = purpose), 
-          method = list(dl.combine("last.points"), cex = 0.8)) +
+  # geom_dl(aes(label  = tyear, colour = purpose), 
+  #         method = list(dl.combine("last.points"), cex = 0.8)) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
   scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
@@ -162,7 +168,7 @@ p1 <-
   labs(x = NULL, y = NULL , title = "SSB")  +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
 
-
+p1
 
 # plot f
 p2 <-
@@ -179,13 +185,13 @@ p2 <-
         # strip.background = element_blank(),
         legend.position = "null") +
   
-  geom_ribbon(data=last, aes(x=year, ymin=lowfishingpressure, ymax=highfishingpressure, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
+  # geom_ribbon(data=last, aes(x=year, ymin=lowfishingpressure, ymax=highfishingpressure, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
 
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
   
-  geom_dl(aes(label  = tyear, colour = purpose), 
-          method = list(dl.combine("last.points"), cex = 0.8)) +
+  # geom_dl(aes(label  = tyear, colour = purpose), 
+  #         method = list(dl.combine("last.points"), cex = 0.8)) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
   scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
@@ -223,13 +229,13 @@ p3 <-
         # strip.background = element_blank(),
         legend.position = "null") +
   
-  geom_ribbon(data=last, aes(x=year, ymin=lowrecruitment, ymax=highrecruitment, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
+  # geom_ribbon(data=last, aes(x=year, ymin=lowrecruitment, ymax=highrecruitment, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
   
-  geom_dl(aes(label  = tyear, colour = purpose), 
-          method = list(dl.combine("last.points"), cex = 0.8)) +
+  # geom_dl(aes(label  = tyear, colour = purpose), 
+  #         method = list(dl.combine("last.points"), cex = 0.8)) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
   scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +

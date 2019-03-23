@@ -25,73 +25,164 @@ options(icesSAG.use_token = TRUE)
 source("../mptools/r/my_utils.r")
 
 # Set dropbox folder
-assessdir <- paste(get_dropbox(), "/iAdvice", sep="")
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load old SAG download data
+iSAGstock_astext_complete     <- get(load(file=paste(dropboxdir,"/rdata/iSAGstock_astext_complete.RData", sep="")))
+iSAGrefpoints_astext_complete <- get(load(file=paste(dropboxdir,"/rdata/iSAGrefpoints_astext_complete.RData", sep="")))
+load(file=paste(dropboxdir, "/rdata/iRename.RData",sep=""))
+load(file=paste(dropboxdir, "/rdata/iStockkey.RData",sep=""))
+
+# set date
+today <- format(Sys.time(), '%Y%m%d')
+
+# =====================================================================================
+# which year (set year = 0 for all years)
+# =====================================================================================
+
+myyear <- 2019
 
 # =====================================================================================
 # generate list of assessmentkeys
 # =====================================================================================
 
-assessmentkeys <- sort(findAssessmentKey())
+assessmentkeys <- sort(findAssessmentKey(year=myyear))
+
+# assessmentkeys <- sort(findAssessmentKey())
+# assessmentkeys[assessmentkeys == 10362]
+# assessmentkeys <- findAssessmentKey(year=2013, full=TRUE)
 # getStockDownloadData(7306)
 
 # =====================================================================================
-# Download all assessments in SAG in full
+# Download assessments from SAG
 # =====================================================================================
 
-# Download all the stock data - takes a long time
+# Download the stock data; use lapply on the assessmentkeys with method getStockDownloadData and then bind the rows. Does not work because of type mismatches for variables
+# t1 <-
+#   do.call(bind.rows, lapply(assessmentkeys, getStockDownloadData)) %>%
+#   lowcase() %>%
+#   dplyr::select(-starts_with('custom')) %>%
+#   distinct()
+
+
+# download all data from assessment keys in a list object
 t1  <- getStockDownloadData(assessmentkeys)
 
-t2 <- data.frame()
-
 # loop over all assessments to bind them together
+t2 <- filter(iSAGstock_astext_complete, stockkey == 0) # start with empty data frame with all columns
 for (i in 1:length(t1)) {
   
-  print(i)
-  if (!is.null(t1[[i]])) {
+  if (class(t1[[i]]) == "data.frame") {
+    
+    print(paste(i,t1[[i]]$AssessmentKey[1],t1[[i]]$StockKeyLabel[1], t1[[i]]$AssessmentYear[1], sep=", "))
+    
     tmp <-
       t1[[i]] %>% 
-      mutate_all(funs("as.character"))
+      mutate_all(funs("as.character")) %>% 
+      lowcase() 
     
     t2  <- bind_rows(t2, tmp)
   }
 }
 
-# Create iSAGdownload with distinct rows
-iSAGdownload <- 
-  t2 %>% 
-  lowcase() %>% 
-  
-  # keep only distinct rows
+# Create iSAGdownload as text with distinct rows
+iSAGstock_astext <- 
+  t2 %>%
+  ungroup() %>% 
   distinct()
 
+# Save dataset to file
+save(iSAGstock_astext, file=paste0(dropboxdir, "/rdata/iSAGstock_astext ", myyear," ", today, ".RData"))
+# save(iSAGstock_astext, file=paste0(dropboxdir, "/rdata/iSAGstock_astext_complete", ".RData"))
 
-# Save file
-today <- format(Sys.time(), '%Y%m%d')
-save(iSAGdownload, file=paste0(assessdir, "/rdata/iSAGdownload ", today, ".RData"))
+
+# Remove the downloaded stocks from the original dataset and add the new downloads
+iSAGstock_astext_complete <-
+  iSAGstock_astext_complete %>%
+  filter(assessmentyear != as.character(myyear)) %>%
+  bind_rows(iSAGstock_astext)
+
+save(iSAGstock_astext_complete, file=paste0(dropboxdir, "/rdata/iSAGstock_astext_complete", ".RData"))
+
+
+# Convert to dataset with appropriate field types
+iSAGstock <-
+  iSAGstock_astext_complete %>% 
+  
+  rename(catcheslandingsunits = catchesladingsunits) %>% 
+  
+  # make numeric
+  mutate_at(c("recruitment","lowrecruitment","highrecruitment",  
+              "tbiomass","lowtbiomass","hightbiomass", 
+              "stocksize", "lowstocksize","highstocksize", 
+              "catches", "landings","discards","ibc","unallocatedremovals",
+              "fishingpressure", "lowfishingpressure","highfishingpressure",
+              "fdiscards","flandings","fibc","funallocated",
+              "fpa","bpa", "flim", "blim", "fmsy", "msybtrigger"), 
+            funs(as.numeric)) %>% 
+  
+  # make integer
+  mutate_at(c("year", "assessmentyear", "recruitmentage","stockdatabaseid"), funs(as.integer)) %>%
+  
+  # make logical
+  mutate_at(c("published"),  funs(as.logical)) %>% 
+  
+  # make lowercase
+  mutate_at(c("purpose", "stockkeylabel", "unitofrecruitment", "stocksizeunits", "stocksizedescription",
+              "catcheslandingsunits", "fishingpressureunits"), 
+            funs(tolower)) %>% 
+  
+  # change -alt for stock assessments to purpose "alternative"
+  mutate(purpose       = ifelse(grepl("\\-alt", stockkeylabel), "alternative", purpose), 
+         stockkeylabel = ifelse(grepl("\\-alt", stockkeylabel), gsub("\\-alt","",stockkeylabel), stockkeylabel)) %>% 
+  
+  # remove specific assessments
+  # filter(!(stockkeylabel == "whb.27.1-91214" & assessmentyear == 2010)) %>%   # This one is double with the whb-comb assessment 
+  
+  mutate(purpose = ifelse(purpose %in% c("initadvice"), "initial advice", purpose)) %>% 
+  
+  # Deal with Norway pout stockkeylabels and initial advice
+  mutate(purpose           = ifelse(grepl("nop-34-jun", stockkeylabel), "initial advice", purpose)) %>% 
+  mutate(stockkeylabel     = ifelse(grepl("nop-34-jun", stockkeylabel), "nop-34", stockkeylabel)) %>% 
+  
+  mutate(purpose           = ifelse(grepl("nop-34-oct", stockkeylabel), "advice", purpose)) %>% 
+  mutate(stockkeylabel     = ifelse(grepl("nop-34-oct", stockkeylabel), "nop-34", stockkeylabel)) %>% 
+  
+  # group_by(stockkey, stockkeylabel, assessmentyear, purpose, published, year) %>% 
+  # filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  
+  # Deal with plaice in the North Sea (assessments prior to 2015 had different area allocation)
+  mutate(
+    stockkey         = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, 100103, stockkey),
+    stockkeylabel    = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, "ple-nsea2", stockkeylabel)
+  ) %>% 
+  
+  # now do the stockkey transformations
+  dplyr::select(-stockkey, -icesareas) %>% 
+  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
+  left_join(iStockkey, by="stockkey") %>% 
+  
+  # remove duplicate assessments (Careful!)
+  # group_by(stockkey, stockkeylabel, assessmentyear, purpose, year) %>% 
+  # filter(row_number() == 1) %>% 
+  ungroup() 
+  
+
+# Save dataset to file
+save(iSAGstock, file=paste0(dropboxdir, "/rdata/iSAGstock", ".RData"))
 
 
 # =====================================================================================
 # Download all the reference point data
 # =====================================================================================
 
-t4 <- getFishStockReferencePoints(assessmentkeys)
-
-iSAGrefpoints <- data.frame()
-
-# loop over all assessments to bind them together
-for (i in 1:length(t4)) {
-  
-  print(i)
-  if (!is.null(t4[[i]])) {
-    tmp <-
-      t4[[i]] %>% 
-      mutate_all(funs("as.character"))
-    
-    iSAGrefpoints  <- bind_rows(iSAGrefpoints, tmp)
-  }
-}
-
-iSAGrefpoints %>% 
-  lowcase() %>% 
-  distinct() %>% 
-  save(file=paste0(assessdir, "/rdata/iSAGrefpoints ", today, ".RData"))
+# t4 <- 
+#   do.call(bind_rows, lapply(assessmentkeys, getFishStockReferencePoints)) %>% 
+#   lowcase() %>% 
+#   distinct()
+# 
+# iSAGrefpoints <- t4
+# 
+# 
+# save(iSAGrefpoints, file=paste0(dropboxdir, "/rdata/iSAGrefpoints ", today, ".RData"))

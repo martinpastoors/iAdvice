@@ -61,6 +61,7 @@ info$FishingPressureUnits      <- "Year-1"
 info$StockSizeDescription      <- "SSB"
 info$StockSizeUnits            <- unique(rby$stockSizeUnits[!is.na(rby$stockSizeUnits)])
 info$Purpose                   <- "Advice"
+info$ModelName                 <- "SAM"
 # info$CustomLimitName1         <- "MBAL"
 # info$CustomLimitValue1        <- 800000
 

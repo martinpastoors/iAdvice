@@ -35,6 +35,8 @@
 # 08/11/2018 updated files on qcsexcel and iadvice; no longer need iStock
 # 20/11/2018 small updates; making sure the database is consistently filled
 # 26/11/2018 added comparison to the data used by Esther Schuch
+# 20/03/2019 adapted with new data during HAWG
+# 23/03/2019 adapated after change to download data procedure
 # -----------------------------------------------------------------------------------------------
 
 # rm(list=ls())
@@ -51,7 +53,7 @@ library(directlabels)  # for printing labels at end of geom lines
 source("../mptools/r/my_utils.r")
 
 # Set working directory to dropbox folder
-advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
+dropboxdir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # -----------------------------------------------------------------------------------------
 # load the Advice database
@@ -59,7 +61,7 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 iAdvice <-
   readxl::read_excel(
-    path= paste(advicedir, "/Excel/ICES Scientific Advice database.xlsm", sep=""), 
+    path= paste(dropboxdir, "/Excel/ICES Scientific Advice database.xlsm", sep=""), 
     sheet     = "DATA",
     col_names = TRUE, 
     col_types = "text", 
@@ -89,7 +91,7 @@ iAdvice <-
     adviceonstock = as.logical(adviceonstock)
   )
   
-save(iAdvice, file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
+save(iAdvice, file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
 # glimpse(iAdvice)
 
@@ -99,7 +101,7 @@ save(iAdvice, file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
 
 iSpecies <-
   readxl::read_excel(
-    path=paste(advicedir, "/excel/species_list.xlsx",sep=""), 
+    path=paste(dropboxdir, "/excel/species_list.xlsx",sep=""), 
     col_names=TRUE, 
     col_types="text") %>%
   mutate_at(c("speciescommonname","trophicguild","fisheriesguild","sizeguild"), 
@@ -107,7 +109,7 @@ iSpecies <-
   group_by(speciesfaocode, speciesscientificname, speciescommonname) %>%
   arrange(speciesfaocode) 
 
-save(iSpecies, file=paste(advicedir, "/rdata/iSpecies.RData",sep=""))
+save(iSpecies, file=paste(dropboxdir, "/rdata/iSpecies.RData",sep=""))
 
 # glimpse(iSpecies)
 
@@ -137,11 +139,11 @@ iStockkey <-
 
 # iStockkey %>% filter(grepl("had.27.7b", stockkeylabelnew)) %>% View()
 
-save(iRename,   file=paste(advicedir, "/rdata/iRename.RData",sep=""))
-save(iStockkey, file=paste(advicedir, "/rdata/iStockkey.RData",sep=""))
+# save(iRename,   file=paste(dropboxdir, "/rdata/iRename.RData",sep=""))
+# save(iStockkey, file=paste(dropboxdir, "/rdata/iStockkey.RData",sep=""))
 
-# write.csv(iRename, file=paste(advicedir, "/excel/iRename.csv",sep=""), row.names = FALSE)
-# write.csv(iStockkey, file=paste(advicedir, "/excel/iStockkey.csv",sep=""), row.names = FALSE)
+# write.csv(iRename, file=paste(dropboxdir, "/excel/iRename.csv",sep=""), row.names = FALSE)
+# write.csv(iStockkey, file=paste(dropboxdir, "/excel/iStockkey.csv",sep=""), row.names = FALSE)
 
 # -----------------------------------------------------------------------------------------
 # load Excel and QSC data
@@ -149,7 +151,7 @@ save(iStockkey, file=paste(advicedir, "/rdata/iStockkey.RData",sep=""))
 
 qcsexcel <-
   readxl::read_excel(
-    path= paste(advicedir, "/excel/QCS and EXCEL Assessment Database combined.xlsm", sep=""), 
+    path= paste(dropboxdir, "/excel/QCS and EXCEL Assessment Database combined.xlsm", sep=""), 
     sheet     = "data",
     col_names = TRUE, 
     col_types = "text", 
@@ -190,7 +192,7 @@ qcsexcel <-
   # make logical
   mutate_at(c("published"),  funs(as.logical)) 
   
-save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
+save(qcsexcel, file=paste(dropboxdir, "/rdata/qcsexcel.RData",sep=""))
 
 
 # -----------------------------------------------------------------------------------------
@@ -198,7 +200,7 @@ save(qcsexcel, file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
 # -----------------------------------------------------------------------------------------
 
 sd <-
-  get(load(file=paste(advicedir, "/rdata/icesSD 20181023.RData",sep=""))) %>% 
+  get(load(file=paste(dropboxdir, "/rdata/icesSD 20181023.RData",sep=""))) %>% 
   lowcase() %>% 
   dplyr::select(-stockkey) %>% 
   # dplyr::select(-stockkey, -previousstockkey, -previousstockkeylabel, -stockdatabaseid) %>% 
@@ -210,87 +212,22 @@ sd <-
 # -----------------------------------------------------------------------------------------
 # load SAG full data (see: DownloadDataFromSAG.r)
 # -----------------------------------------------------------------------------------------
+# sag %>% filter(assessmentyear == 2019, stockkeylabel=="her.27.6a7bc") %>% View()
 
 sag <- 
-  get(load(file=paste(advicedir, "/rdata/iSAGdownload 20181113.RData",sep=""))) %>% 
+  get(load(file=paste(dropboxdir, "/rdata/iSAGstock.RData",sep=""))) %>% 
   
-  rename(catcheslandingsunits = catchesladingsunits) %>% 
-  
-  # make numeric
-  mutate_at(c("recruitment","lowrecruitment","highrecruitment",  
-              "tbiomass","lowtbiomass","hightbiomass", 
-              "stocksize", "lowstocksize","highstocksize", 
-              "catches", "landings","discards","ibc","unallocatedremovals",
-              "fishingpressure", "lowfishingpressure","highfishingpressure",
-              "fdiscards","flandings","fibc","funallocated",
-              "fpa","bpa", "flim", "blim", "fmsy", "msybtrigger"), 
-            funs(as.numeric)) %>% 
-  
-  # make integer
-  mutate_at(c("year", "assessmentyear", "recruitmentage","stockdatabaseid"), funs(as.integer)) %>%
-  
-  # make logical
-  mutate_at(c("published"),  funs(as.logical)) %>% 
-  
-  # make lowercase
-  mutate_at(c("purpose", "stockkeylabel", "unitofrecruitment", "stocksizeunits", "stocksizedescription",
-              "catcheslandingsunits", "fishingpressureunits"), 
-            funs(tolower)) %>% 
-  
-  # change -alt for stock assessments to purpose "alternative"
-  mutate(purpose       = ifelse(grepl("\\-alt", stockkeylabel), "alternative", purpose), 
-         stockkeylabel = ifelse(grepl("\\-alt", stockkeylabel), gsub("\\-alt","",stockkeylabel), stockkeylabel)) %>% 
-  
-  # remove nephrops and rays for now
-  filter(tolower(substr(stockkeylabel,1,3)) != "nep") %>% 
-  filter(tolower(substr(stockkeylabel,1,3)) != "raj") %>% 
-  filter(tolower(substr(stockkeylabel,1,2)) != "rj") %>% 
-  
-  # remove all data prior to 2013
-  filter(assessmentyear >= 2013) %>% 
-  
-  # remove specific assessments
-  # filter(!(stockkeylabel == "whb.27.1-91214" & assessmentyear == 2010)) %>%   # This one is double with the whb-comb assessment 
-
-  mutate(purpose = ifelse(purpose %in% c("initadvice"), "initial advice", purpose)) %>% 
-  
-  # Deal with Norway pout stockkeylabels and initial advice
-  mutate(purpose           = ifelse(grepl("nop-34-jun", stockkeylabel), "initial advice", purpose)) %>% 
-  mutate(stockkeylabel     = ifelse(grepl("nop-34-jun", stockkeylabel), "nop-34", stockkeylabel)) %>% 
-  
-  mutate(purpose           = ifelse(grepl("nop-34-oct", stockkeylabel), "advice", purpose)) %>% 
-  mutate(stockkeylabel     = ifelse(grepl("nop-34-oct", stockkeylabel), "nop-34", stockkeylabel)) %>% 
-
-  # group_by(stockkey, stockkeylabel, assessmentyear, purpose, published, year) %>% 
-  # filter(row_number() == 1) %>% 
-  ungroup() %>% 
-  
-  # Deal with plaice in the North Sea (assessments prior to 2015 had different area allocation)
-  mutate(
-    stockkey         = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, 100103, stockkey),
-    stockkeylabel    = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, "ple-nsea2", stockkeylabel)
-  ) %>% 
-  
-  # Only keep distinct rows
-  distinct() %>% 
-  
-  # now do the stockkey transformations
-  dplyr::select(-stockkey, -icesareas) %>% 
+  dplyr::select(-stockkey) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   left_join(iStockkey, by="stockkey") %>% 
   
-  # make logical
-  mutate_at(c("published"),  funs(as.logical)) %>% 
+  # remove custom fields for now
+  dplyr::select(-starts_with("custom")) %>% 
   
-  # remove duplicate assessments (Careful!)
-  group_by(stockkey, stockkeylabel, assessmentyear, purpose, year) %>% 
-  filter(row_number() == 1) %>% 
-  ungroup() %>% 
-  
-  # remove all the custom fiels (for now)
-  select(-starts_with('custom'))
+  # remove all data prior to 2013
+  filter(assessmentyear >= 2013) 
 
-save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
+# save(sag, file=paste(dropboxdir, "/rdata/iSAG.RData",sep=""))
 
 
 # -----------------------------------------------------------------------------------------
@@ -298,8 +235,8 @@ save(sag, file=paste(advicedir, "/rdata/iSAG.RData",sep=""))
 # -----------------------------------------------------------------------------------------
 
 sagrefpoints <- 
-  get(load(file=paste(advicedir, "/rdata/iSAGrefpoints 20181113.RData",sep=""))) %>% 
-  select(-stockkey, -stockdatabaseid) %>% 
+  get(load(file=paste(dropboxdir, "/rdata/iSAGrefpoints.RData",sep=""))) %>% 
+  select(-stockkey) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   left_join(iStockkey, by="stockkey") %>% 
   mutate_at(c("flim","fpa","fmsy", "fmanagement", 
@@ -308,7 +245,7 @@ sagrefpoints <-
   mutate_at(c("assessmentyear", "recruitmentage"), funs(as.integer)) 
 
 
-save(sagrefpoints, file=paste(advicedir, "/rdata/iSAGrefpoints.RData",sep=""))
+# save(sagrefpoints, file=paste(dropboxdir, "/rdata/iSAGrefpoints.RData",sep=""))
 
 # sagrefpoints %>% filter(grepl("her"))
 
@@ -363,12 +300,16 @@ sag_to_merge <-
   left_join(sag, by=c("stockkey","stockkeylabel", "stockkeylabelold", "stockkeylabelnew", "assessmentyear", "purpose")) %>% 
   mutate(source = "sag")
 
+# unique(sag_to_merge$source)
+
 # qcs
 qcsexcel_to_merge <-
   only_in_qcsexcel %>% 
   left_join(qcsexcel, by=c("stockkey","stockkeylabel", "stockkeylabelold", "stockkeylabelnew", "assessmentyear","purpose")) %>% 
   dplyr::select(one_of(names(sag_to_merge))) %>% 
   mutate(source = tolower(source))
+
+# unique(qcsexcel_to_merge$source)
 
 # iAdvice (only model specifications)
 iadvice_to_merge <-
@@ -385,9 +326,10 @@ iAssess <-
   bind_rows(sag_to_merge, qcsexcel_to_merge) %>% 
   
   # add information from iAdvice and add source if not already existing
-  full_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold", 
-                     "stockkeylabelnew", "assessmentyear","purpose")) %>% 
-  mutate(source = ifelse(is.na(source), "iadvice", source)) %>% 
+  left_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>% 
+  
+  # full_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>% 
+  # mutate(source = ifelse(is.na(source), "iadvice", source)) %>% 
   
   # descriptions and units to lowercase
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
@@ -466,5 +408,7 @@ iAssess <-
   # sorting
   arrange(speciesfaocode, stockkey, assessmentyear, purpose)
 
-save(iAssess, file=paste(advicedir, "/rdata/iAssess.RData",sep=""))
+save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+
+# unique(iAssess$source)
 

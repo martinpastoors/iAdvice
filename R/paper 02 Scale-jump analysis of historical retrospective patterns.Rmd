@@ -16,6 +16,7 @@ link-citations: yes
 # 07/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
 # 13/01/2019 now only figures and tables
 # 15/01/2019 added scale jump figure with explanatory variables
+# 22/02/2019 focussed on Pairwise Comparison of Means = scale jumps under different conditions
 # -----------------------------------------------------------------------------------------------
 
 require("knitr")
@@ -27,6 +28,7 @@ knit_hooks$set(crop = hook_pdfcrop)
 library(tidyverse) # for piping and easy coding
 library(reshape2)  # reshaping data; e.g. dcast
 library(ggthemes)  # for themes
+library(ggExtra)   # for specific type of plots e.g. ggMarginal
 library(pander)    # for print tables
 library(readxl)    # read excel files
 library(cowplot)   # multiplots
@@ -166,7 +168,8 @@ d.assessments <-
   #   stockdefinitionchange = ifelse(assessmentyear == max(assessmentyear), 2, stockdefinitionchange) 
 
   # benchmarks
-  left_join(d.benchmarks, by=c("stock", "stockkeylabelold", "assessmentyear")) %>% 
+  full_join(d.benchmarks, by=c("stock", "stockkeylabelold", "assessmentyear")) %>% 
+  # left_join(d.benchmarks, by=c("stock", "stockkeylabelold", "assessmentyear")) %>% 
   mutate(benchmark = ifelse(is.na(benchmark), 0, benchmark))
 
 # dataset with stock definition changes
@@ -513,7 +516,98 @@ d.metrics_bystock <-
   mutate(stock2 = substr(stock,1,3)) 
 
 
-# Calculations of scale-differences and scale jumps ==========================================
+# Calculations of Pairwise Comparison of Mean and scale jumps ==========================================
+
+pairwise_comparisons <- function(removelastyears=0, numberofyears=10) {
+  
+  # Create a set of assessment pairs: two subsequent assessments  
+  d.pairs <-
+    d.selection %>% 
+    distinct(stock, assessmentyear, variable) %>% 
+    group_by(stock, variable) %>% 
+    arrange(stock, variable, assessmentyear) %>% 
+    mutate(assessmentyearprior = lag(assessmentyear),
+           assessmentpair      = paste(assessmentyearprior, assessmentyear, sep="-")) %>% 
+    rename(assessmentyearlast  = assessmentyear) %>% 
+    filter(!is.na(assessmentyearprior))
+  
+  # data series with most recent (last) estimation of the pair
+  d.pairs.last <-
+    d.pairs %>% 
+    select(-assessmentyearprior) %>% 
+    left_join(d.selection, by=c("stock", "variable", "assessmentyearlast" = "assessmentyear")) %>% 
+    mutate(label="last") %>% 
+    rename(assessmentyear = assessmentyearlast)
+  
+  # data series with previous (prior) estimation of the pair
+  d.pairs.prior <-
+    d.pairs %>% 
+    select(-assessmentyearlast) %>% 
+    left_join(d.selection, by=c("stock", "variable", "assessmentyearprior" = "assessmentyear")) %>% 
+    mutate(label="prior") %>% 
+    rename(assessmentyear = assessmentyearprior)
+  
+  
+  # pairwise data roughly
+  d.pairwise.roughly <-
+    bind_rows(d.pairs.last, d.pairs.prior) %>% 
+    group_by(stock, assessmentpair, variable) %>% 
+    
+    # filter the appropriate period
+    filter(year <= max(assessmentyear) - removelastyears,
+           year >= max(assessmentyear) - removelastyears - numberofyears -5) 
+  
+  # pairwise data
+  d.pairwise <-
+    d.pairwise.roughly %>% 
+    group_by(stock, assessmentpair, variable) %>% 
+    
+    # filter the appropriate period
+    filter(year <= max(assessmentyear) - removelastyears,
+           year >= max(assessmentyear) - removelastyears - numberofyears) %>% 
+    
+    # sort
+    arrange(stock, assessmentpair, assessmentyear, year) %>% 
+  
+    # filter only years that are in common in last and prior
+    group_by(stock, assessmentpair, variable, year) %>% 
+    mutate(n = n()) %>% 
+    filter(n() == 2) 
+  
+
+  d.pcm <-
+    d.pairwise %>% 
+    
+    # calculate means per period
+    group_by(stock, assessmentpair, variable) %>% 
+    mutate(   firstyear      = min(year),
+              lastyear       = max(year)) %>% 
+    group_by(stock, assessmentpair, variable, assessmentyear, label, firstyear, lastyear) %>% 
+    summarise(value = mean(value, na.rm=TRUE)) %>% 
+    gather(key=tmp, value=year, firstyear:lastyear) %>% 
+    arrange(stock, assessmentpair, variable, assessmentyear, label) %>% 
+  
+    # calculate metrics
+    filter(tmp=="firstyear") %>% 
+    ungroup() %>% 
+    select(stock, assessmentpair, variable, label, value) %>% 
+    spread(key=label, value=value) %>% 
+    mutate(phi            = (prior-last)/last,
+           phi_abs        = abs(phi),
+           assessmentyear = as.integer(substr(assessmentpair, 6,9))) 
+  
+  res <- list("d.pcm"= d.pcm, 
+              "d.pairwise.roughly"=d.pairwise.roughly,
+              "d.pairwise" =d.pairwise)
+  
+  return(res)
+
+} # End of pairwise_comparisons function
+
+tmp <- pairwise_comparisons(removelastyears = 0, numberofyears=5)
+
+
+# REMOVE FROM HERE !!
 
 removelastyears <- 0
 numberofyears   <- 10
@@ -530,16 +624,16 @@ d.pairs <-
   rename(assessmentyearlast  = assessmentyear) %>% 
   filter(!is.na(assessmentyearprior))
 
-# data series with most recent (last) estimation
-d.last <-
+# data series with most recent (last) estimation of the pair
+d.pairs.last <-
   d.pairs %>% 
   select(-assessmentyearprior) %>% 
   left_join(d.selection, by=c("stock", "variable", "assessmentyearlast" = "assessmentyear")) %>% 
   mutate(label="last") %>% 
   rename(assessmentyear = assessmentyearlast)
 
-# data series with previous (prior) estimation
-d.prior <-
+# data series with previous (prior) estimation of the pair
+d.pairs.prior <-
   d.pairs %>% 
   select(-assessmentyearlast) %>% 
   left_join(d.selection, by=c("stock", "variable", "assessmentyearprior" = "assessmentyear")) %>% 
@@ -549,7 +643,7 @@ d.prior <-
 
 # pairwise data roughly
 d.pairwise.roughly <-
-  bind_rows(d.last, d.prior) %>% 
+  bind_rows(d.pairs.last, d.pairs.prior) %>% 
   group_by(stock, assessmentpair, variable) %>% 
   
   # filter the appropriate period
@@ -594,6 +688,9 @@ d.jumps <-
   mutate(phi            = (prior-last)/last,
          phi_abs        = abs(phi),
          assessmentyear = as.integer(substr(assessmentpair, 6,9))) 
+
+
+# CONTINUE FROM HERE
 
 # calculate average jump per stock
 d.jumps.bystock <-
@@ -889,8 +986,9 @@ d.selection %>%
 <!-- Plot Retro metrics                                     --------------------------- -->
 <!-- ################################################################################## -->
 
-```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
 
+## NOT SHOWN 
 
 d.metrics_annual %>% 
   
@@ -933,7 +1031,9 @@ d.metrics_annual %>%
 <!-- Plot Summary of retro metrics                          --------------------------- -->
 <!-- ################################################################################## -->
 
-```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
+
+## NOT SHOWN
 
 d.metrics_bystock %>% 
   
@@ -970,15 +1070,17 @@ d.metrics_bystock %>%
 <!-- Plot pairwise comparisons                                                          -->
 <!-- ################################################################################## -->
 
-```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+res <- pairwise_comparisons(removelastyears = 0, numberofyears=10)
 
 myvar     <- "stocksize"
 myspecies <- "mac"
-firstyear <- 1991
+firstyear <- 2008
 
 d.pairwise.means <-
   
-  d.pairwise %>% 
+  res$d.pairwise %>% 
   
   filter(variable == myvar) %>% 
   filter(grepl(myspecies, stockkeylabelold)) %>% 
@@ -993,7 +1095,7 @@ d.pairwise.means <-
   gather(key=tmp, value=year, firstyear:lastyear) %>% 
   arrange(stock, assessmentpair, variable, assessmentyear, label) 
 
-d.pairwise %>% 
+res$d.pairwise %>% 
   
   filter(variable == myvar) %>% 
   filter(grepl(myspecies, stockkeylabelold)) %>% 
@@ -1011,7 +1113,7 @@ d.pairwise %>%
     legend.position  = "none"
   ) +  
   
-  geom_line(data=filter(d.pairwise.roughly, 
+  geom_line(data=filter(res$d.pairwise.roughly, 
                         variable == myvar, 
                         grepl(myspecies, stockkeylabelold),
                         as.numeric(substr(assessmentpair,1,4)) >= firstyear), size=0.5) +
@@ -1039,15 +1141,17 @@ d.pairwise %>%
 #####Page break
 
 <!-- ################################################################################## -->
-<!-- Plot scale jumps                                                                   -->
+<!-- Plot pairwise comparison means                                                     -->
 <!-- ################################################################################## -->
 
-```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
 
+res <- pairwise_comparisons(removelastyears = 0, numberofyears=10)
 
+threshold <- 0.10
 
 # plot scale jumps between assessments
-d.jumps %>% 
+res$d.pcm %>% 
   distinct(stock, variable, assessmentyear, phi) %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
@@ -1079,8 +1183,9 @@ d.jumps %>%
   
   geom_line (aes(colour=factor(decade))) +
   geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
+  # geom_point(aes(colour=factor(decade), size = abs(value) )) +
   
-  geom_point(data=filter(d.assessments, benchmark == 1),
+  geom_point(data=filter(d.benchmarks, benchmark == 1),
             aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
   
   geom_point(data=filter(d.assessments, assessmentmodelchange == 1),
@@ -1102,13 +1207,17 @@ d.jumps %>%
 
 *`r fig_nums("scalejumps")`*
 
-```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
 
+## NOT SHOWN 
 
+res <- pairwise_comparisons(removelastyears = 0, numberofyears=10)
+
+threshold <- 0.10
 
 # plot scale jumps between assessments vs assessment methods
 
-d.jumps %>% 
+res$d.pcm %>% 
   distinct(stock, variable, assessmentyear, phi) %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
@@ -1141,7 +1250,7 @@ d.jumps %>%
   geom_line (aes(colour=factor(decade))) +
   geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
   
-  geom_point(data=filter(d.assessments, benchmark == 1),
+  geom_point(data=filter(d.benchmarks, benchmark == 1),
             aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
   
   coord_cartesian(ylim=c(-1, 1),
@@ -1162,10 +1271,13 @@ d.jumps %>%
 ```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
 
 
+res <- pairwise_comparisons(removelastyears = 0, numberofyears=10)
+
+threshold <- 0.10
 
 # plot scale jumps between assessments vs assessment methods
 
-d.jumps %>% 
+res$d.pcm %>% 
   distinct(stock, variable, assessmentyear, phi) %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
@@ -1208,12 +1320,14 @@ d.jumps %>%
   geom_line (aes(colour=factor(decade))) +
   geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
   
-  geom_point(data=filter(d.assessments, benchmark == 1),
+  geom_point(data=filter(d.benchmarks, benchmark == 1),
             aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
   
+  # coord_cartesian(xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
   coord_cartesian(ylim=c(-1, 1),
                   xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
   
+  # ggMarginal(data=d.assessments, type="histogram")
   scale_fill_manual(values = myBlues) +
         
   scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
@@ -1222,6 +1336,7 @@ d.jumps %>%
   labs(x=" ", y="") +
   facet_wrap(~stock)
 
+# filter(d.assessments, benchmark == 1) %>% View()
 
 ```
 

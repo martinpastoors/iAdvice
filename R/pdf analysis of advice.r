@@ -9,16 +9,24 @@ library(tidyverse)
 # loop over years
 for (y in 1981:2018) {
   assign(paste("results",y,sep=""), {
-    print(y)
-    keyword_directory(file.path("E:/PA",y),
-                      keyword = c('precautionary approach', 
-                                  'biological reference point',
-                                  "minimum biologically acceptable", "mbal", 
-                                  "safe biological limit",
-                                  "maximum sustainable yield", "msy",
-                                  "btrigger", "bpa", "blim", "fpa", "fmsy"),
-                      # file_pattern   = ".pdf"
-                      ignore_case    = TRUE, recursive = FALSE, surround_lines = 1, full_names     = TRUE) %>% 
+    
+    # print(y)
+    print(file.path("F:/ices/advice",y))
+    
+    keyword_directory(file.path("F:/ices/advice",y),
+                      keyword = c('robust'),
+                      file_pattern   = ".pdf",
+                      ignore_case    = TRUE, recursive = TRUE, 
+                      surround_lines = 1, full_names     = TRUE) %>% 
+      # keyword_directory(file.path("E:/PA",y),
+      #                 keyword = c('precautionary approach', 
+      #                             'biological reference point',
+      #                             "minimum biologically acceptable", "mbal", 
+      #                             "safe biological limit",
+      #                             "maximum sustainable yield", "msy",
+      #                             "btrigger", "bpa", "blim", "fpa", "fmsy"),
+      #                 # file_pattern   = ".pdf"
+      #                 ignore_case    = TRUE, recursive = FALSE, surround_lines = 1, full_names     = TRUE) %>% 
       mutate(year = y) 
     
   })

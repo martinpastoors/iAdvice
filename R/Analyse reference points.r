@@ -32,6 +32,7 @@ iAdvice %>%
   
   # add the reference points from sagrefpoints
   bind_rows(sagrefpoints) %>% 
+  filter(assessmentyear >= 1997) %>% 
   
   group_by(assessmentyear) %>% 
   summarize(flim = sum(!is.na(flim)),

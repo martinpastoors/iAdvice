@@ -2,6 +2,8 @@
 # combine FAO and IHO areas.r
 #
 # 19/12/2018 based on SFrame code
+# 21/01/2019 now run the code with the original FAO files (includes more levels)
+# 22/01/2019 contains both the EEZ_FAO combinations, and the FAO codes as stand alone. 
 # --------------------------------------------------------------------------------------------
 
 # devtools::install_github("fishvice/tidyices", dependencies = FALSE)
@@ -22,55 +24,61 @@ library(viridis)
 source("../mptools/r/my_utils.r")
 # load("../prf/rdata/world.df.RData")
 
-load(file.path(onedrive,"rdata/iho_eez.RData"))
-
 # get dropbox directory
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
-# source("https://raw.githubusercontent.com/einarhjorleifsson/gisland/master/R/read_sf_ftp.R")
-# faolink <- read_csv("/net/www/export/home/ftp/pub/reiknid/einar/shapes/fao-areas_nocoastline.csv")
-# fao <- read_sf_ftp("fao-areas_nocoastline")
-# eez <- read_sf_ftp("eez")
-
-
+# set onedrive directory
+onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
 
 # ----------------------------------------------------------------------------------------------------------
 # set world in sf format
 # ----------------------------------------------------------------------------------------------------------
 
-world1 <- sf::st_as_sf(
-  map('world', plot = FALSE, fill = TRUE, 
-               regions = c("netherlands","belgium","France(?!:Corsica)",
-                           "ireland","united kingdom", "UK", "Denmark","Germany",
-                           "norway","iceland", "greenland", "faroe islands", "spain","portugal",
-                           "sweden", "finland","poland", "luxembourg"))
-)
+world_sf <- 
+  sf::st_as_sf(map('world', 
+                   plot    = FALSE, 
+                   fill    = TRUE, 
+                   regions = c("netherlands","belgium","France(?!:Corsica)",
+                               "ireland","united kingdom", "UK", "Denmark","Germany",
+                               "norway","iceland", "greenland", "faroe islands", "spain","portugal",
+                               "sweden", "finland","poland", "luxembourg")) )
+
+save(world_sf, file=file.path(dropboxdir,"rdata/world_sf.RData"))
+
+# ----------------------------------------------------------------------------------------------------------
+# check ICES areas in sf format
+# ----------------------------------------------------------------------------------------------------------
+
+ices_sf <-
+  get(load(file.path(onedrive,"rdata/ices.RData"))) %>% 
+  subset(F_AREA == "27") %>% 
+  sf::st_as_sf() %>% 
+  select(FID, F_LEVEL, variable=F_CODE, F_STATUS, id, geometry) %>%
+  mutate(coastalstate = as.character(NA)) %>% 
+  arrange(variable, F_LEVEL)
 
 
 # ----------------------------------------------------------------------------------------------------------
-# generate FAO areas as SF object
+# set fao in sf format
 # ----------------------------------------------------------------------------------------------------------
+# load fao (and limit to area 27 for now) and convert to sf
+fao_sf <-
+  get(load(file.path(onedrive,"rdata/fao.RData"))) %>% 
+  subset(F_AREA == "27") %>% 
+  sf::st_as_sf() %>% 
+  select(FID, F_LEVEL, variable=F_CODE, F_STATUS, id, geometry) %>%
+  mutate(coastalstate = as.character(NA)) %>% 
+  arrange(variable, F_LEVEL)
 
-fao <-
-  
-  iceshape::faolink %>% 
-  
-  # link to geometry
-  # left_join(fao) %>%
-  left_join(iceshape::fao) %>%
-  
-  # remove missing geometries
-  filter(!is.na(geometry)) %>% 
-  
-  # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
-  st_sf() 
+save(fao_sf, file=file.path(dropboxdir,"rdata/fao_sf.RData"))
 
 # ----------------------------------------------------------------------------------------------------------
-# generate IHO & EEZ areas as SF object
+# set iho and eez in sf format
 # ----------------------------------------------------------------------------------------------------------
 
-iho <- 
-  sf::st_as_sf(iho_eez) %>% 
+iho_eez_sf <-
+  get(load(file.path(onedrive,"rdata/iho_eez.RData"))) %>% 
+  sf::st_as_sf() %>% 
   mutate(
     coastalstate = ifelse(tolower(Country) %in% c("united kingdom","ireland", "france", "spain","belgium",
                                                   "denmark","germany","netherlands","portugal", 
@@ -102,31 +110,57 @@ iho <-
                           "IHO", coastalstate),
     coastalstate = ifelse(grepl("High seas of the Greenland Sea", MarRegion), 
                           "IHO", coastalstate)
-       
+    
   ) %>% 
   filter(!is.na(coastalstate) )  %>% 
-  st_sf() %>% 
+  sf::st_sf() %>% 
   
   # join areas together by coastal state (or IHO)
   group_by(coastalstate) %>%
   summarise() 
+  
+save(iho_eez_sf, file=file.path(dropboxdir,"rdata/iho_eez_sf.RData"))
 
-# Join the stuff and first only keep the ISO_geometry stuff; then add the FAO areas again
-fao_iho <-
-  st_intersection(fao, iho) %>%
-  
-  # generate a new variable, the ices name and then country iso
-  mutate(variable = paste(name, coastalstate, sep="_")) %>% 
-  
-  distinct(unit, variable, geometry, .keep_all = FALSE) %>% 
-  rename(name = variable) %>% 
-  
-  rbind(., fao) 
+# ----------------------------------------------------------------------------------------------------------
+# Intersect the FAO and IHO/EEZ areas. 
+# ----------------------------------------------------------------------------------------------------------
 
+intersect_sf <-
+  
+  st_intersection(fao_sf, iho_eez_sf) %>%
+  
+  # generate a new variable, the fao code and then country iso
+  mutate(variable = paste(F_CODE, coastalstate, sep="_"),
+         F_LEVEL  = paste(F_LEVEL, "EEZ", sep="_")) %>% 
+  
+  dplyr::select(-F_CODE)
+
+# ----------------------------------------------------------------------------------------------------------
+# Merge the FAO and IHO/EEZ data frames and then add the geometries. 
+# ----------------------------------------------------------------------------------------------------------
+
+fao_eez_sf <-
+  
+  # this is the way to bind rows for SF objects
+  do.call(rbind, list(intersect_sf, fao_sf)) %>% 
+  
+  arrange(variable)
+
+
+# ----------------------------------------------------------------------------------------------------------
 # save file on dropbox
-save(fao_iho, file=file.path(dropboxdir,"rdata/fao_iho.RData"))
+# ----------------------------------------------------------------------------------------------------------
 
+save(fao_eez_sf, file=file.path(dropboxdir,"rdata/fao_eez_sf.RData"))
+
+
+# ----------------------------------------------------------------------------------------------------------
 # testing with plaice TAC areas
+# ----------------------------------------------------------------------------------------------------------
+
+fao_eez_sf %>% filter(grepl("27.3.a", variable)) %>% View()
+fao_sf %>% filter(grepl("27.3", variable)) %>% View()
+
 t <- 
   data.frame(
     tac  = c("PLE/2A3AX4", "PLE/03AN."),
@@ -136,12 +170,12 @@ t <-
   
   # make into long list
   separate(area, c(paste0("x",1:50)), sep = ";") %>%
-  gather(key=dummy, value=name, x1:x50) %>%
+  gather(key=dummy, value=variable, x1:x50) %>%
   drop_na() %>%
   select(-dummy) %>%
   
   # left_join the area geometries
-  left_join(fao_iho, by="name") %>% 
+  left_join(fao_eez_sf, by="variable") %>% 
   st_sf() %>% 
   
   # summarize by tac 
@@ -149,7 +183,7 @@ t <-
   summarise() 
 
 w <-
-  st_intersection(world1, st_as_sfc(st_bbox(t)))
+  st_intersection(world_sf, st_as_sfc(st_bbox(t)))
 
 t %>% 
   ggplot() +
@@ -164,4 +198,27 @@ t %>%
   geom_sf(data=w, inherit.aes = FALSE, fill="gray90") +
   geom_sf(aes(fill = factor(tac)), alpha=0.4) +
   ggmisc::scale_fill_crayola() 
+
+
+# -----------------------------------------------------------------------------------
+# Testing the FAO area definitions in the Baltic Sea
+# -----------------------------------------------------------------------------------
+
+t <-
+  fao_sf %>% 
+  filter(grepl("27.3", variable)) %>% 
+  mutate(F_LEVEL = factor(F_LEVEL, levels=c("SUBAREA","DIVISION","SUBDIVISION","SUBUNIT")))
+
+w <-
+  st_intersection(world_sf, st_as_sfc(st_bbox(t)))
+
+t %>% 
+  ggplot() +
+  theme_publication() +
+  theme(legend.position="none") +
+  geom_sf(data=w, inherit.aes = FALSE, fill="cornsilk") +
+  geom_sf(aes(fill=variable)) +
+  geom_sf_text(aes(label = variable)) +
+  labs(x="", y="") +
+  facet_wrap(~F_LEVEL)
 

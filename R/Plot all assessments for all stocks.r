@@ -20,6 +20,8 @@ advicedir <- paste(get_dropbox(), "/iAdvice", sep="")
 # load the data
 load(file=paste(advicedir,"/rdata/iAssess.RData", sep=""))
 
+sort(unique(iAssess$stockkeylabelold))
+
 # ---------------------------------------------------------------------------------------------
 # Historic retros: plot stock data over different assessment years 
 # ---------------------------------------------------------------------------------------------
@@ -33,7 +35,8 @@ iAssess %>%
   filter(!is.na(stockkeylabelold)) %>%
   filter(!is.na(stocksize)) %>%
   
-  filter(!(stockkeylabelold %in% c("ghl-arct", "san-shet", "san-scow"))) %>% 
+  # filter(!(stockkeylabelold %in% c("ghl-arct", "san-shet", "san-scow"))) %>% 
+  filter(!(stockkeylabelold %in% c("cod-scow", "had-scow", "whg-scow", "her-vian"))) %>% 
   
   filter(year > 1980, year <= assessmentyear, year >= assessmentyear - 15) %>% 
   
@@ -148,3 +151,59 @@ iAssess %>%
   # xlim(2005,2020) +
   labs(x = NULL, y = NULL , title = "Recruitment")  +
   facet_wrap(~ stockkeylabelold, scales="free_y")
+
+
+# ---------------------------------------------------------------------------------------------
+# Historic retros: plot specific stock data over different assessment years 
+# ---------------------------------------------------------------------------------------------
+
+iAssess %>% 
+  mutate(stockkeylabelold = ifelse(is.na(stockkeylabelold), stockkeylabel, stockkeylabelold)) %>% 
+  mutate(decade = as.character(10*floor(assessmentyear/10))) %>% 
+  
+  filter(purpose              == "advice") %>%   # this ignores situations with "initial advice"
+  filter(stocksizeunits       == "tonnes") %>% 
+  filter(stocksizedescription == "ssb") %>% 
+  filter(!is.na(stockkeylabelold)) %>%
+  filter(!is.na(stocksize)) %>%
+  
+  # filter(!(stockkeylabelold %in% c("ghl-arct", "san-shet", "san-scow"))) %>% 
+  filter(stockkeylabelold %in% c("cod-scow", "had-scow", "whg-scow", "her-vian")) %>% 
+  
+  filter(year > 1960) %>% 
+  
+  group_by(stockkeylabelold) %>% 
+  filter(assessmentyear == max(assessmentyear, na.rm=TRUE)) %>% 
+  
+  # group_by(stockkeylabelold) %>% 
+  # mutate(n_assess      = n_distinct(assessmentyear)) %>% 
+  # filter(n_assess >= 5) %>% 
+  
+  arrange(stockkeylabel, assessmentyear, year) %>% 
+  ungroup() %>% 
+  data.frame() %>% 
+  
+  # filter(stockkeylabelold == "ple-echw") %>% 
+  
+  
+  ggplot(aes(year,recruitment, group=assessmentyear)) +
+  theme_publication() +
+  theme(legend.title=element_blank(),
+        axis.text.x  = element_text(angle = 0, vjust = 0.5, size=9),
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.spacing.x = unit(0.1, "mm"),
+        panel.spacing.y = unit(0.5, "mm"),
+        strip.background = element_blank(),
+        strip.text       = element_text(size=8, face="plain", hjust=0, margin = margin(0,0,0,0, "mm"))
+        # legend.position = "null"
+  ) +
+  
+  geom_line(aes(colour = decade) ) +
+  
+  expand_limits(y = 0) +
+  # xlim(2005,2020) +
+  labs(x = NULL, y = NULL , title = "recruitment")  +
+  # facet_wrap(~ assessmentyear, scales="free_y")
+  facet_wrap(~ stockkeylabelold, scales="free_y") 
+# facet_wrap(~ stockkeylabelold+assessmentyear)

@@ -23,6 +23,9 @@ library(viridis)
 source("../mptools/r/my_utils.r")
 # load("../prf/rdata/world.df.RData")
 
+load("C:/Users/Martin Pastoors/PFA/PFA Team Site - PRF/rdata/fao.df.RData")
+load("C:/Users/Martin Pastoors/PFA/PFA Team Site - PRF/rdata/fao.RData")
+
 # get dropbox directory
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
@@ -30,14 +33,23 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 # set world in sf format
 # ----------------------------------------------------------------------------------------------------------
 
-world1 <- sf::st_as_sf(map('world', plot = FALSE, fill = TRUE, 
+world_sf <- sf::st_as_sf(map('world', plot = FALSE, fill = TRUE, 
                            regions = c("netherlands","belgium","France(?!:Corsica)",
                                        "ireland","united kingdom", "UK", "Denmark","Germany",
                                        "norway","iceland", "greenland", "faroe islands", "spain","portugal",
                                        "sweden", "finland","poland")))
-# ggplot(data=world1) + geom_sf()
+# ggplot(data=world_sf) + geom_sf()
 
+fao27_sf <- 
+  fao %>% 
+  subset(F_AREA == "27") %>% 
+  # subset(F_AREA == "27", F_LEVEL == "DIVISION") %>% 
+  sf::st_as_sf(plot = FALSE, fill = TRUE)
 
+ggplot(data=fao_division) + geom_sf()
+fao_einar <- iceshape::fao
+fao_link  <- iceshape::faolink
+  
 # ----------------------------------------------------------------------------------------------------------
 # load the iAdvice data
 # ----------------------------------------------------------------------------------------------------------
@@ -76,10 +88,10 @@ stk <-
   mutate(species = stringr::str_sub(fishstock, 1, 3)) %>% 
   
   # link to the link table to get name of geometry
-  left_join(iceshape::faolink) %>%
+  left_join(iceshape::faolink, by="unit") %>%
   
   # link to geometry
-  left_join(iceshape::fao) %>%
+  left_join(iceshape::fao, by="name") %>%
   
   # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
   st_sf() %>%
