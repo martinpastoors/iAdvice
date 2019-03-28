@@ -217,9 +217,9 @@ sd <-
 sag <- 
   get(load(file=paste(dropboxdir, "/rdata/iSAGstock.RData",sep=""))) %>% 
   
-  dplyr::select(-stockkey) %>% 
-  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
-  left_join(iStockkey, by="stockkey") %>% 
+  # dplyr::select(-stockkey) %>% 
+  # left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
+  # left_join(iStockkey, by="stockkey") %>% 
   
   # remove custom fields for now
   dplyr::select(-starts_with("custom")) %>% 
@@ -326,10 +326,10 @@ iAssess <-
   bind_rows(sag_to_merge, qcsexcel_to_merge) %>% 
   
   # add information from iAdvice and add source if not already existing
-  left_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>% 
   
-  # full_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>% 
-  # mutate(source = ifelse(is.na(source), "iadvice", source)) %>% 
+  # left_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>% 
+  full_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>%
+  mutate(source = ifelse(is.na(source), "iadvice", source)) %>%
   
   # descriptions and units to lowercase
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
@@ -398,8 +398,18 @@ iAssess <-
     # fishingpressureunits
     fishingpressureunits       = ifelse(is.na(fishingpressure) & !is.na(fishingpressureunits), NA, fishingpressureunits),
     fishingpressureunits       = ifelse(is.na(fishingpressureunits) & fishingpressuredescription == "f", "year-1",fishingpressureunits),
-    fishingpressureunits       = ifelse(fishingpressureunits == "per year", "year-1", fishingpressureunits)
+    fishingpressureunits       = ifelse(fishingpressureunits == "per year", "year-1", fishingpressureunits),
+    
+    # purpose
+    purpose                    = ifelse(purpose == "initadvice", "initial advice", purpose),
+    purpose                    = ifelse(purpose == "trends"    , "trends only", purpose),
+    purpose                    = ifelse(purpose == "forecast"  , "advice", purpose)
+    
   ) %>% 
+  
+  # remove historical (only used once)
+  filter(purpose != "historical") %>% 
+  filter(purpose != "no assessment") %>% 
   
   # Handle published and assessmentscale
   mutate(published = ifelse(is.na(published.x), published.y, published.x)) %>% 
@@ -412,3 +422,5 @@ save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 
 # unique(iAssess$source)
 
+# unique(iAssess$purpose)
+# filter(iAssess, purpose=="historical") %>% View()

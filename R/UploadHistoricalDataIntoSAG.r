@@ -30,7 +30,11 @@ load(file=paste(dropboxdir,"/rdata/iAdvice.RData", sep=""))
 STK   <- filter(iAssess, stockkeylabelold == "her-47d", assessmentyear == 1983)
 STK2  <-
   distinct(STK, stockkeylabelold, assessmentyear, purpose) %>% 
-  left_join(iAdvice, by=c("stockkeylabelold", "assessmentyear", "purpose"))
+  left_join(iAdvice, by=c("stockkeylabelold", "assessmentyear", "purpose")) %>% 
+  mutate(purpose = case_when(purpose == "advice"       ~ "Advice [Historical]",
+                             purpose == "exploratory"  ~ "Unofficial [Historical]",
+                             purpose == "benchmark"    ~ "Benchmark [Historical]",
+                             TRUE                      ~ as.character(NA)))
 
 # Set years and ranges
 FiY   <- min(STK$year)
@@ -69,8 +73,8 @@ info$FishingPressureDescription<- ifelse(tolower(unique(na.omit(STK$fishingpress
 info$FishingPressureUnits      <- NA 
 info$StockSizeDescription      <- na.omit(unique(STK$stocksizedescription))
 info$StockSizeUnits            <- ifelse(unique(na.omit(STK$stocksizeunits)) =="tonnes", "t", "")
-info$Purpose                   <- "Historical"
-# info$ModelName                 <- toupper(na.omit(STK2$assessmentmodel))
+info$Purpose                   <- STK2$purpose
+info$ModelName                 <- toupper(na.omit(STK2$assessmentmodel))
 info$ModelType                 <- "A"    # age based
 
 # ------------------------------------------------------------------------------------------

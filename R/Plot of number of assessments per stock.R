@@ -54,6 +54,9 @@ x <-
   # filter(speciesfaocode %in% c("mac")) %>% 
   # filter(speciesfaocode %in% c("her")) %>% 
   
+  # filter (!(source == "iadvice" & !grepl("bench", purpose))) %>% 
+  filter (source != "iadvice") %>% 
+  
   distinct(stockkey, stockkeylabel, stockkeylabelold, speciesfaocode, assessmentyear, purpose, published, source) %>% 
   # distinct(stockkey, stockkeylabel, stockkeylabelold, speciesfaocode, assessmentyear, purpose, published) %>% 
   
@@ -63,6 +66,8 @@ x <-
   data.frame() %>% 
   mutate(stockkeylabelold = factor(stockkeylabelold),
          stockkeylabelold = factor(stockkeylabelold, levels = rev(levels(stockkeylabelold))),
+         source          = factor(source),
+         source          = factor(source, levels=rev(levels(source))),
          purpose          = factor(purpose),
          purpose          = factor(purpose, levels=rev(levels(purpose))),
          published          = factor(published),
@@ -71,13 +76,13 @@ x <-
          column              = ifelse(id  >  splitter & id <= 2*splitter, 2, column),
          column              = ifelse(id  > 2*splitter            , 3, column)) %>% 
   
-  mutate(source           = factor(source, levels=c("wg","qcs", "excel","sag"))) %>% 
+  # mutate(source           = factor(source, levels=c("wg","qcs", "excel","sag"))) %>% 
   #mutate(source = "SAG") %>% 
   left_join(iSpecies, by="speciesfaocode")
 
 
 # define colour scales for source
-mySourceColors        <- brewer.pal(max(length(levels(x$source)),3),"Set1")
+mySourceColors        <- brewer.pal(length(levels(x$source)),"Set1")
 names(mySourceColors) <- levels(x$source)
 
 # define headers for columns
@@ -114,7 +119,9 @@ names(myPurposeColors) <- rev(levels(x$purpose))
 
 # plot by stock and purpose
 x %>% 
+  filter(grepl("bench", purpose)) %>% 
   left_join(y, by="column") %>% 
+  
   ggplot(aes(x=assessmentyear, y=stockkeylabelold)) +
   theme_publication() +
   theme(panel.spacing = unit(1, "lines"),

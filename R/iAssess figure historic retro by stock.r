@@ -51,12 +51,13 @@ d <-
   # filter(grepl("cod-347d", stockkeylabelold) ) %>% 
   
   filter(grepl("spr-nsea", stockkeylabelold) | grepl("spr.27.3a4", stockkeylabelnew) ) %>%
-  mutate(stockkeylabelold = "spr.27.3a4") %>% 
-  filter(assessmentyear >= 2015) %>% 
-  mutate(recruitment = ifelse(year == assessmentyear, NA, recruitment)) %>% 
+  mutate(stockkeylabelold = "spr.27.3a4") %>%
+  filter(assessmentyear >= 2015) %>%
+  mutate(recruitment = ifelse(year == assessmentyear, NA, recruitment)) %>%
   
-  # filter(grepl("her-3a22", stockkeylabelold) ) %>% 
-  # filter(grepl("her-47d3", stockkeylabelold) ) %>% 
+  # filter(grepl("her-irls", stockkeylabelold) ) %>% 
+  # filter(grepl("her-67bc", stockkeylabelold) ) %>% 
+  # filter(grepl("her-47d3", stockkeylabelold) ) %>%
   # filter(grepl("her-nirs", stockkeylabelold) ) %>% 
   # filter(grepl("hom-west", stockkeylabelold) ) %>% 
   
@@ -69,7 +70,7 @@ d <-
   # filter(year             >  2000) %>%  
   # filter(year             <= assessmentyear) %>% 
   # filter(assessmentyear   >  1980) %>% 
-  filter(assessmentyear   >  2012) %>% 
+  filter(assessmentyear   >  2014) %>% 
   
   filter(purpose %in% c("advice", "update")) %>% 
   
@@ -155,8 +156,8 @@ p1 <-
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
   
-  # geom_dl(aes(label  = tyear, colour = purpose), 
-  #         method = list(dl.combine("last.points"), cex = 0.8)) +
+  geom_dl(aes(label  = tyear, colour = purpose),
+          method = list(dl.combine("last.points"), cex = 0.8)) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
   scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
@@ -168,7 +169,6 @@ p1 <-
   labs(x = NULL, y = NULL , title = "SSB")  +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
 
-p1
 
 # plot f
 p2 <-
@@ -203,12 +203,12 @@ p2 <-
   labs(x = NULL, y = NULL , title = "F")   +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
 
-# plot_grid(p1 + theme(legend.position  = "none", 
-#                      axis.title       = element_blank(),
-#                      strip.background = element_rect(colour=NA, fill=NA),
-#                      strip.text       = element_text(colour=NA)), 
-#           p2 + theme(axis.title       = element_blank()),
-#           ncol=2, align = 'h', rel_widths = c(3.5,3))
+plot_grid(p1 + theme(legend.position  = "none",
+                     axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          p2 + theme(axis.title       = element_blank()),
+          ncol=2, align = 'h', rel_widths = c(3.5,3))
 
 
 # filter(iAssess, stockkeylabelold == "cod-iceg") %>% View()

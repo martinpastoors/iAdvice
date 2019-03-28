@@ -12,7 +12,7 @@
 # library(devtools)
 # devtools::install_github("ices-tools-prod/icesSAG")
 # devtools::install_github("ices-tools-prod/icesSD")
-# install_github("ices-tools-prod/icesSAG@development")
+# devtools::install_github("ices-tools-prod/icesSAG@development")
 
 library(icesSAG)
 library(tidyverse)
@@ -28,10 +28,12 @@ source("../mptools/r/my_utils.r")
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # Load old SAG download data
-iSAGstock_astext_complete     <- get(load(file=paste(dropboxdir,"/rdata/iSAGstock_astext_complete.RData", sep="")))
-iSAGrefpoints_astext_complete <- get(load(file=paste(dropboxdir,"/rdata/iSAGrefpoints_astext_complete.RData", sep="")))
-load(file=paste(dropboxdir, "/rdata/iRename.RData",sep=""))
-load(file=paste(dropboxdir, "/rdata/iStockkey.RData",sep=""))
+iSAGstock_astext_complete     <- get(load(file=paste(dropboxdir,"/rdata/iSAGstock_astext_complete.RData", sep=""))) 
+# save(iSAGstock_astext_complete, file=paste0(dropboxdir, "/rdata/iSAGstock_astext_complete", ".RData"))
+
+# iSAGrefpoints_astext_complete <- get(load(file=paste(dropboxdir,"/rdata/iSAGrefpoints_astext_complete.RData", sep="")))
+iRename                       <- get(load(file=paste(dropboxdir, "/rdata/iRename.RData",sep="")))
+iStockkey                     <- get(load(file=paste(dropboxdir, "/rdata/iStockkey.RData",sep="")))
 
 # set date
 today <- format(Sys.time(), '%Y%m%d')
@@ -48,9 +50,10 @@ myyear <- 2019
 
 assessmentkeys <- sort(findAssessmentKey(year=myyear))
 
+# assessmentkeys <- findAssessmentKey(year=1983, full=TRUE)
 # assessmentkeys <- sort(findAssessmentKey())
 # assessmentkeys[assessmentkeys == 10362]
-# assessmentkeys <- findAssessmentKey(year=2013, full=TRUE)
+# assessmentkeys <- findAssessmentKey(year=2019, full=TRUE)
 # getStockDownloadData(7306)
 
 # =====================================================================================
@@ -67,6 +70,7 @@ assessmentkeys <- sort(findAssessmentKey(year=myyear))
 
 # download all data from assessment keys in a list object
 t1  <- getStockDownloadData(assessmentkeys)
+# sort(names(t1[[12]]))
 
 # loop over all assessments to bind them together
 t2 <- filter(iSAGstock_astext_complete, stockkey == 0) # start with empty data frame with all columns
@@ -104,12 +108,11 @@ iSAGstock_astext_complete <-
 
 save(iSAGstock_astext_complete, file=paste0(dropboxdir, "/rdata/iSAGstock_astext_complete", ".RData"))
 
-
 # Convert to dataset with appropriate field types
 iSAGstock <-
   iSAGstock_astext_complete %>% 
   
-  rename(catcheslandingsunits = catchesladingsunits) %>% 
+  # rename(catcheslandingsunits = catchesladingsunits) %>% 
   
   # make numeric
   mutate_at(c("recruitment","lowrecruitment","highrecruitment",  
@@ -118,7 +121,8 @@ iSAGstock <-
               "catches", "landings","discards","ibc","unallocatedremovals",
               "fishingpressure", "lowfishingpressure","highfishingpressure",
               "fdiscards","flandings","fibc","funallocated",
-              "fpa","bpa", "flim", "blim", "fmsy", "msybtrigger"), 
+              "fpa","bpa", "flim", "blim", "fmsy", "msybtrigger",
+              "custom1", "custom2", "custom3", "custom4", "custom5"), 
             funs(as.numeric)) %>% 
   
   # make integer
@@ -129,7 +133,8 @@ iSAGstock <-
   
   # make lowercase
   mutate_at(c("purpose", "stockkeylabel", "unitofrecruitment", "stocksizeunits", "stocksizedescription",
-              "catcheslandingsunits", "fishingpressureunits"), 
+              "catcheslandingsunits", "fishingpressureunits",
+              "customname1", "customname2", "customname3","customname4","customname5"), 
             funs(tolower)) %>% 
   
   # change -alt for stock assessments to purpose "alternative"

@@ -24,8 +24,16 @@ library(viridis)
 source("../mptools/r/my_utils.r")
 # load("../prf/rdata/world.df.RData")
 
+# source("r/iDatabases generator.r")
+
 # set onedrive directory
 onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
+
+# Set dropbox folder
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
 # ----------------------------------------------------------------------------------------------------------
 # load spatial objects in sf format
@@ -43,7 +51,11 @@ fao.eez.sf <-
 fao.sf <-
   get(load(file.path(onedrive,"rdata/fao.sf.RData"))) 
 
-load(file.path(onedrive,"rdata/iho.eez.sf.RData"))
+iho.eez.sf <-
+  get(load(file.path(onedrive,"rdata/iho.eez.sf.RData")))
+
+# filter(fao.sf, grepl("27.6", F_CODE)) %>% View()
+# filter(fao.eez.sf, grepl("27.6", F_CODE)) %>% View()
 
 # ----------------------------------------------------------------------------------------------------------
 # load herring data
@@ -108,9 +120,34 @@ herring_areas %>%
 # ----------------------------------------------------------------------------------------------------------
 
 fao.sf %>%
-  filter(grepl("27.3", F_CODE)) %>%
-  mutate(F_CODE = str_sub(F_CODE, start=6)) %>% 
+  filter(grepl("27.6", F_CODE)) %>%
+
+  mutate(F_CODE = str_sub(F_CODE, start=4)) %>% 
   
+  ggplot() +
+  theme_publication() +
+  theme(panel.spacing    = unit(0.1, "lines"),
+        text             = element_text(size=8),
+        axis.text        = element_blank(),
+        axis.ticks       = element_blank(),
+        strip.background = element_blank(),
+        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm")),
+        legend.title     = element_blank()) +
+  theme(legend.position = "none") +
+  geom_sf(aes(fill=F_CODE)) +
+  geom_sf_text(aes(label = F_CODE)) +
+  facet_wrap(~F_LEVEL)
+
+
+# ----------------------------------------------------------------------------------------------------------
+# generate FAO_EEZ overview
+# ----------------------------------------------------------------------------------------------------------
+
+fao.eez.sf %>%
+  filter(grepl("27.6|27.7", F_CODE)) %>%
+  data.frame() %>% 
+  mutate(F_CODE = str_sub(F_CODE, start=4)) %>% 
+
   ggplot() +
   theme_publication() +
   theme(panel.spacing    = unit(0.1, "lines"),
@@ -138,17 +175,49 @@ fao.sf %>%
 # generate herring tac overview
 # ----------------------------------------------------------------------------------------------------------
 
-herring_tacs <- 
+# source("r/iDatabases generator.r")
+
+# filter(fao.eez.sf, grepl("27.3", F_CODE)) %>% View()
+
+  
+# fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
+tacs_all <- 
   readxl::read_excel(path="D:/Dropbox/iAdvice/Excel/ICES Scientific Advice database.xlsm", 
                      col_names=TRUE, col_types="text", sheet = "iTAC") %>% 
-  lowcase() %>% 
-  filter(tacid %in% c("HER/3BC+24", "HER/03A.", "HER/03A-BC", "HER/4AB.", "HER/4CXB7D", "HER/2A47DX")) %>% 
+  lowcase()
+
+tacs_toplot <- 
+  iAdvice %>% 
+  mutate(taccode = toupper(taccode)) %>% 
+  dplyr::select(stockkeylabel, assessmentyear, tacyear, taccode) %>% 
   
-  # make "area" into a long table
+  # readxl::read_excel(path="D:/Dropbox/iAdvice/Excel/ICES Scientific Advice database.xlsm", 
+  #                    col_names=TRUE, col_types="text", sheet = "iTAC") %>% 
+  # lowcase() %>% 
+  # dplyr::select(-area, -x1) %>% 
+  
+  filter(grepl("PLE/", taccode) & taccode != "HER/1/2-") %>% 
+  # filter(grepl("HER/", taccode) & taccode != "HER/1/2-") %>% 
+  # filter(taccode %in% c("HER/3BC+24", "HER/03A.", "HER/03A-BC", "HER/4AB.", "HER/4CXB7D", "HER/2A47DX")) %>% 
+  # filter(taccode %in% c("HER/5B6ANB;HER/6AS7BC")) %>% 
+  filter(tacyear == 2018) %>% 
+  
+
+  # make "tac" into a long table first
+  separate(taccode, c(paste0("x",1:50)), sep = ";") %>%
+  gather(key=dummy, value=taccode, x1:x50) %>%
+  drop_na() %>%
+  dplyr::select(-dummy) %>% 
+  
+  # merge tacs_all again
+  left_join(tacs_all, by="taccode") %>% 
+
+  # now make "area" into a long table first
   separate(area, c(paste0("x",1:50)), sep = ";") %>%
   gather(key=dummy, value=F_CODE, x1:x50) %>%
   drop_na() %>%
   dplyr::select(-dummy) %>% 
+  arrange(taccode) %>% 
   
   # link to the link table to get name of geometry
   left_join(fao.eez.sf, by="F_CODE") %>%
@@ -157,15 +226,16 @@ herring_tacs <-
   st_sf() %>%
   
   # join areas together by stock and assessmentyear
-  group_by(tacid) %>%
+  group_by(taccode) %>%
   summarise()
 
 # fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
 
-w <- st_intersection(world.sf, st_as_sfc(st_bbox(herring_tacs)))
-f <- st_intersection(fao.sf, st_as_sfc(st_bbox(herring_tacs)))
 
-herring_tacs %>% 
+w <- st_intersection(world.sf, st_as_sfc(st_bbox(tacs_toplot)))
+f <- st_intersection(fao.sf, st_as_sfc(st_bbox(tacs_toplot)))
+
+tacs_toplot %>% 
   ggplot() +
   theme_publication() +
   theme(panel.spacing    = unit(0.1, "lines"),
@@ -173,25 +243,25 @@ herring_tacs %>%
         axis.text        = element_blank(),
         axis.ticks       = element_blank(),
         strip.background = element_blank(),
-        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm")),
-        legend.title     = element_blank()) +
+        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm"))) +
   
   theme(legend.title=element_blank()) +
+  theme(legend.position="none") +
   
   geom_sf(data=w, inherit.aes = FALSE, fill="gray90") +
   # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
   
   
-  geom_sf(aes(fill = factor(tacid)), alpha=0.6, colour="black") +
+  geom_sf(aes(fill = factor(taccode)), alpha=0.6, colour="black") +
   # geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour="black") +
 
   geom_sf(data=f, inherit.aes = FALSE, fill=NA, colour="black", size=0.5) +
   # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
   
   # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
-  # geom_sf_text(aes(label = fishstock)) +
+  # geom_sf_text(aes(label = taccode)) +
   ggmisc::scale_fill_crayola() +
-  facet_wrap(~tacid)
+  facet_wrap(~taccode, ncol=8)
 # facet_grid(variable~assessmentyear)
 
 
@@ -199,11 +269,11 @@ herring_tacs %>%
 # generate herring stock overview
 # ----------------------------------------------------------------------------------------------------------
 
-herring_stocks <- 
+stocks_toplot <- 
   iAdvice %>% 
   
-  filter(stockkeylabelold %in% c("her-47d3", "her-3a22"),
-         assessmentyear == 2018) %>%
+  filter(stockkeylabelold %in% c("her-67bc", "her-vian","her-irlw"),
+         assessmentyear == 2014) %>%
   distinct(stockkeylabelold, stockkeylabel, stockarea) %>% 
   
   # make "area" into a long table
@@ -224,10 +294,10 @@ herring_stocks <-
 
 # fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
 
-w <- st_intersection(world.sf, st_as_sfc(st_bbox(herring_stocks)))
-f <- st_intersection(fao.sf, st_as_sfc(st_bbox(herring_stocks)))
+w <- st_intersection(world.sf, st_as_sfc(st_bbox(stocks_toplot)))
+f <- st_intersection(fao.sf, st_as_sfc(st_bbox(stocks_toplot)))
 
-herring_stocks %>% 
+stocks_toplot %>% 
   ggplot() +
   theme_publication() +
   theme(panel.spacing    = unit(0.1, "lines"),
