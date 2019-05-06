@@ -1,11 +1,12 @@
 # --------------------------------------------------------------------------------------------
-# plot Stock and TAC area.r
+# plot stock and tac areas.r
 #
-# plotting stock areas (over time)
+# plotting stock and tac areas (over time); also overview of FAO and EEZ areas
 # 
 # 27/04/2018 cleaned up the code
 # 28/11/2018 updated the code to work with new iAdvice database
 # 19/12/2018 using new FAO_IHO dataset for international and EEZ waters
+# 28/03/2019 updated after HAWG
 # --------------------------------------------------------------------------------------------
 
 # devtools::install_github("fishvice/tidyices", dependencies = FALSE)
@@ -24,17 +25,15 @@ library(viridis)
 source("../mptools/r/my_utils.r")
 # load("../prf/rdata/world.df.RData")
 
-# get dropbox directory
-dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+# source("r/iDatabases generator.r")
 
 # set onedrive directory
 onedrive <- file.path(Sys.getenv('USERPROFILE'), 'PFA/PFA team site - PRF') 
 
+# Set dropbox folder
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
-# ----------------------------------------------------------------------------------------------------------
-# load the iAdvice data
-# ----------------------------------------------------------------------------------------------------------
-
+# Load dataset
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
 # ----------------------------------------------------------------------------------------------------------
@@ -47,127 +46,11 @@ world.sf <- get(load(file.path(onedrive,"rdata/world.sf.RData"))) %>%
 world2.sf <- get(load(file.path(onedrive,"rdata/world2.sf.RData"))) %>% 
   rownames_to_column()
 
-fao.eez.sf <-
-  get(load(file.path(onedrive,"rdata/fao.eez.sf.RData"))) 
-
 fao.sf <-
   get(load(file.path(onedrive,"rdata/fao.sf.RData"))) 
 
-load(file.path(onedrive,"rdata/iho.eez.sf.RData"))
-
-# ----------------------------------------------------------------------------------------------------------
-# generate the stock object: stock, assessmentyear and area(s) 
-# ----------------------------------------------------------------------------------------------------------
-
-stock <-
-  iAdvice %>% 
-  
-  # filter(speciesfaocode == "ple") %>%
-  # filter(grepl("27.2|27.3|27.4", tacarea)) %>% 
-  
-  filter(speciesfaocode == "her") %>%
-  filter(grepl("27.3", stockarea) & !grepl("27.4", stockarea)) %>% 
-  filter(assessmentyear %in% 1985:1993) %>%
-  # filter(assessmentyear == 1989) %>% 
-  
-  distinct(fishstock = stockkeylabelold, stockkey, assessmentyear, stockarea) %>%
-  
-  # make "area" into a long table
-  separate(stockarea, c(paste0("x",1:50)), sep = ";") %>%
-  gather(key=dummy, value=F_CODE, -fishstock, -assessmentyear, -stockkey) %>%
-  drop_na() %>%
-  select(-dummy) %>%
-  mutate(species = stringr::str_sub(fishstock, 1, 3)) %>% 
-  
-  # link to the link table to get name of geometry
-  left_join(fao.eez.sf, by="F_CODE") %>%
-  arrange(fishstock, F_CODE) %>%
-  
-  # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
-  st_sf() %>%
-  
-  # join areas together by stock and assessmentyear
-  group_by(fishstock, assessmentyear) %>%
-  summarise()
-
-# fao.eez.sf %>% filter(grepl("27.3.d.29", F_CODE)) %>% View()
-# fao.eez.sf %>% filter(grepl("27.3.D.29", F_CODE)) %>% View()
-# ices.sf %>% filter(grepl("27.3.D.29", F_CODE)) %>% View()
-
-# ----------------------------------------------------------------------------------------------------------
-# generate the tac object: stock, assessmentyear and area(s) 
-# ----------------------------------------------------------------------------------------------------------
-
-source("D:/GIT/iAdvice/R/iDatabases generator.r")
-
-tac <-
-  iAdvice %>% 
-  
-  # filter(speciesfaocode == "ple") %>%
-  # filter(grepl("27.2|27.3|27.4", tacarea)) %>% 
-  
-  filter(speciesfaocode == "her") %>%
-  filter(grepl("27.3", tacarea)) %>% 
-  filter(assessmentyear %in% 1986:1993) %>%
-  # filter(assessmentyear == 1989) %>% 
-  
-  distinct(taccode, assessmentyear, tacarea) %>%
-  # mutate(tacarea = toupper(tacarea)) %>% 
-  
-  # make "area" into a long table
-  separate(tacarea, c(paste0("x",1:50)), sep = ";") %>%
-  gather(key=dummy, value=F_CODE, -assessmentyear, -taccode) %>%
-  drop_na() %>%
-  select(-dummy) %>%
-  mutate(species = tolower(stringr::str_sub(taccode, 1, 3))) %>% 
-  
-  # link to the link table to get name of geometry
-  left_join(fao.eez.sf, by="F_CODE") %>%
-  
-  # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
-  st_sf() %>%
-  
-  # join areas together by stock and assessmentyear
-  group_by(taccode, assessmentyear) %>%
-  summarise()
-
-# fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
-
-# ----------------------------------------------------------------------------------------------------------
-# generate plot
-# ----------------------------------------------------------------------------------------------------------
-
-w <- st_intersection(world.sf, st_as_sfc(st_bbox(stock)))
-stock %>% rename(variable=fishstock) %>%
-
-# w <- st_intersection(world.sf, st_as_sfc(st_bbox(tac)))
-# tac %>% rename(variable=taccode) %>% 
-  
-  filter(assessmentyear == 1988) %>%
-  
-  ggplot() +
-  theme_publication() +
-  theme(panel.spacing    = unit(0.1, "lines"),
-        text             = element_text(size=8),
-        axis.text        = element_blank(),
-        axis.ticks       = element_blank(),
-        strip.background = element_blank(),
-        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm")),
-        legend.title     = element_blank()) +
-  
-  theme(legend.title=element_blank()) +
-  
-  geom_sf(data=w, inherit.aes = FALSE, fill="gray90") +
-  # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
-  
-  geom_sf(aes(fill = factor(variable)), alpha=0.6, colour="black") +
-  # geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour="black") +
-  
-  # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
-  # geom_sf_text(aes(label = fishstock)) +
-  ggmisc::scale_fill_crayola() +
-  facet_wrap(~assessmentyear)
-  # facet_grid(variable~assessmentyear)
+fao.eez.sf <-
+  get(load(file.path(onedrive,"rdata/fao.eez.sf.RData"))) 
 
 
 # ----------------------------------------------------------------------------------------------------------
@@ -175,8 +58,9 @@ stock %>% rename(variable=fishstock) %>%
 # ----------------------------------------------------------------------------------------------------------
 
 fao.sf %>%
-  filter(grepl("27.3", F_CODE)) %>%
-  mutate(F_CODE = str_sub(F_CODE, start=6)) %>% 
+  filter(grepl("27.7.a", F_CODE)) %>%
+
+  mutate(F_CODE = str_sub(F_CODE, start=4)) %>% 
   
   ggplot() +
   theme_publication() +
@@ -193,11 +77,198 @@ fao.sf %>%
   facet_wrap(~F_LEVEL)
 
 
-world.sf %>%
-  filter(rowname %in% c("Russia", "Lithuania", "Poland")) %>% 
+# ----------------------------------------------------------------------------------------------------------
+# generate FAO_EEZ overview
+# ----------------------------------------------------------------------------------------------------------
+
+fao.eez.sf %>%
+  filter(grepl("27.7.a", F_CODE)) %>%
+  data.frame() %>% 
+  mutate(F_CODE = str_sub(F_CODE, start=4)) %>% 
+
   ggplot() +
+  theme_publication() +
+  theme(panel.spacing    = unit(0.1, "lines"),
+        text             = element_text(size=8),
+        axis.text        = element_blank(),
+        axis.ticks       = element_blank(),
+        strip.background = element_blank(),
+        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm")),
+        legend.title     = element_blank()) +
   theme(legend.position = "none") +
-  geom_sf(aes(fill=rowname), alpha=0.2) +
-  geom_sf_text(aes(label = rowname, colour=rowname)) +
-  coord_sf(xlim=c(10,40), ylim=c(50, 65)) 
+  geom_sf(aes(fill=F_CODE)) +
+  geom_sf_text(aes(label = F_CODE)) +
+  facet_wrap(~F_LEVEL)
+
+
+# world.sf %>%
+#   filter(rowname %in% c("Russia", "Lithuania", "Poland")) %>% 
+#   ggplot() +
+#   theme(legend.position = "none") +
+#   geom_sf(aes(fill=rowname), alpha=0.2) +
+#   geom_sf_text(aes(label = rowname, colour=rowname)) +
+#   coord_sf(xlim=c(10,40), ylim=c(50, 65)) 
+
+# ----------------------------------------------------------------------------------------------------------
+# generate stock overviews
+# ----------------------------------------------------------------------------------------------------------
+# fao.eez.sf %>% filter(grepl("27.7.a", F_CODE)) %>% View()
+
+
+stocks_toplot <- 
+  iAdvice %>% 
+  
+  filter(grepl("her", stockkeylabel),
+         !stockkeylabel %in% c("her.27.1-24a514a","her.27.5a"),
+         assessmentyear == 2018) %>%
+  # filter(stockkeylabelold %in% c("her-67bc", "her-vian","her-irlw"),
+  #        assessmentyear == 2018) %>%
+  distinct(stockkeylabelold, stockkeylabel, stockarea) %>% 
+  
+  # make "area" into a long table
+  separate(stockarea, c(paste0("x",1:50)), sep = ";") %>%
+  gather(key=dummy, value=F_CODE, x1:x50) %>%
+  drop_na() %>%
+  dplyr::select(-dummy) %>% 
+  
+  # link to the link table to get name of geometry
+  left_join(fao.eez.sf, by="F_CODE") %>%
+  
+  # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
+  st_sf() %>%
+  
+  # join areas together by stock and assessmentyear
+  group_by(stockkeylabelold, stockkeylabel) %>%
+  summarise()
+
+# fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
+
+w <- st_intersection(world.sf, st_as_sfc(st_bbox(stocks_toplot)))
+f <- st_intersection(fao.sf, st_as_sfc(st_bbox(stocks_toplot)))
+
+stocks_toplot %>% 
+  ggplot() +
+  theme_publication() +
+  theme(panel.spacing    = unit(0.1, "lines"),
+        text             = element_text(size=8),
+        strip.background = element_blank(),
+        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm"))) +
+  
+  theme(legend.title=element_blank()) +
+  theme(legend.position="none") +
+  # theme(axis.text        = element_blank(),
+  #       axis.ticks       = element_blank()) +
+
+  geom_sf(data=w, inherit.aes = FALSE, fill="gray90") +
+  # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
+  
+  geom_sf(data=f, inherit.aes = FALSE, fill=NA, colour="gray", size=0.5) +
+  # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
+  
+  geom_sf(aes(fill = factor(stockkeylabel)), alpha=0.6, colour="black", size=1) +
+  # geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour="black") +
+  
+  # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
+  geom_sf_label(aes(label = stockkeylabel), alpha=0.9) +
+  ggmisc::scale_fill_crayola() +
+  facet_wrap(~stockkeylabel)
+# facet_grid(variable~assessmentyear)
+
+
+# ----------------------------------------------------------------------------------------------------------
+# generate tac overviews
+# ----------------------------------------------------------------------------------------------------------
+
+# filter(fao.eez.sf, grepl("27.3", F_CODE)) %>% View()
+
+  
+# fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
+tacs_all <- 
+  readxl::read_excel(path="D:/Dropbox/iAdvice/Excel/ICES Scientific Advice database.xlsm", 
+                     col_names=TRUE, col_types="text", sheet = "iTAC") %>% 
+  lowcase()
+
+tacs_toplot <- 
+  iAdvice %>% 
+  mutate(taccode = toupper(taccode)) %>% 
+  dplyr::select(stockkeylabel, assessmentyear, tacyear, taccode) %>% 
+  
+  # readxl::read_excel(path="D:/Dropbox/iAdvice/Excel/ICES Scientific Advice database.xlsm", 
+  #                    col_names=TRUE, col_types="text", sheet = "iTAC") %>% 
+  # lowcase() %>% 
+  # dplyr::select(-area, -x1) %>% 
+  
+  filter(grepl("HER/", taccode) ) %>% 
+  # filter(grepl("HER/", taccode) & taccode != "HER/1/2-") %>% 
+  # filter(grepl("HER/", taccode) & taccode != "HER/1/2-") %>% 
+  # filter(taccode %in% c("HER/3BC+24", "HER/03A.", "HER/03A-BC", "HER/4AB.", "HER/4CXB7D", "HER/2A47DX")) %>% 
+  # filter(taccode %in% c("HER/5B6ANB;HER/6AS7BC")) %>% 
+  filter(tacyear == 2018) %>% 
+  
+
+  # make "tac" into a long table first
+  separate(taccode, c(paste0("x",1:50)), sep = ";") %>%
+  gather(key=dummy, value=taccode, x1:x50) %>%
+  drop_na() %>%
+  dplyr::select(-dummy) %>% 
+  
+  # merge tacs_all again
+  left_join(tacs_all, by="taccode") %>% 
+
+  # now make "area" into a long table first
+  separate(area, c(paste0("x",1:50)), sep = ";") %>%
+  gather(key=dummy, value=F_CODE, x1:x50) %>%
+  drop_na() %>%
+  dplyr::select(-dummy) %>% 
+  arrange(taccode) %>% 
+  
+  # link to the link table to get name of geometry
+  left_join(fao.eez.sf, by="F_CODE") %>%
+  
+  # because left_join above, we just have a data.frame. We need to specify that this is a data.frame with sf features
+  st_sf() %>%
+  
+  # join areas together by stock and assessmentyear
+  group_by(taccode) %>%
+  summarise()
+
+# fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
+
+
+w <- st_intersection(world.sf, st_as_sfc(st_bbox(tacs_toplot)))
+f <- st_intersection(fao.sf, st_as_sfc(st_bbox(tacs_toplot)))
+
+tacs_toplot %>% 
+  ggplot() +
+  theme_publication() +
+  theme(panel.spacing    = unit(0.1, "lines"),
+        text             = element_text(size=8),
+        axis.text        = element_blank(),
+        axis.ticks       = element_blank(),
+        strip.background = element_blank(),
+        strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm"))) +
+  
+  theme(legend.title=element_blank()) +
+  theme(legend.position="none") +
+  
+  # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
+  # coord_sf(datum=st_crs(3035)) +
+  
+  geom_sf(data=w, inherit.aes = FALSE, fill="gray90") +
+  # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
+  
+  
+  geom_sf(data=f, inherit.aes = FALSE, fill=NA, colour="gray", size=0.5) +
+  # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
+  
+  geom_sf(aes(fill = factor(taccode)), alpha=0.6, colour="black") +
+  # geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour="black") +
+  
+           
+  geom_sf_label(aes(label = taccode), alpha=0.9) +
+  
+  ggmisc::scale_fill_crayola() +
+  facet_wrap(~taccode, ncol=8)
+# facet_grid(variable~assessmentyear)
+
 

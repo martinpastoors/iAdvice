@@ -97,20 +97,21 @@ fishdata$Low_FishingPressure      <- STK$lowfishingpressure
 fishdata$FishingPressure          <- STK$fishingpressure
 fishdata$High_FishingPressure     <- STK$highfishingpressure
 
+# save(info, fishdata, file="testupload.RData")
+
 # upload to SAG
 key <- icesSAG::uploadStock(info, fishdata)
 
-# save(info, fishdata, file="testupload.RData")
-
-# Get SAG settings
-# getSAGSettingsForAStock(assessmentKey=key) %>% View()
-getSAGSettingsForAStock(assessmentKey=10364) %>% View()
-
 # Add comment to SAG settings
-setSAGSettingForAStock(assessmentKey=10364, 
+setSAGSettingForAStock(assessmentKey=key, 
                        chartKey=0,
                        settingKey=21,
                        settingValue="Martin Pastoors Historical data",
                        copyNextYear=FALSE) 
 
 
+# Get SAG settings
+# getSAGSettingsForAStock(assessmentKey=key) %>% View()
+
+assessmentkeys <- sort(findAssessmentKey(year=1983))
+t1  <- unlist(getStockDownloadData(10368))

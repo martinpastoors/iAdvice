@@ -11,6 +11,7 @@ output:
 #
 # 07/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
 # 10/01/2018 made small changes to the table
+# 04/05/2019 updated for WKRRMAC 2019; focus on mackerel
 # -----------------------------------------------------------------------------------------------
 
 require("knitr")
@@ -45,18 +46,41 @@ d <-
   
   filter(grepl("her-47|mac-67|mac-nea|whb-c|whb-n|hom-c|hom-w|her-3a22|her-noss", 
                stockkeylabelold)) %>%
-  filter(!grepl("benchmark", purpose)) %>% 
+  
+  # count number of assessments per year; keep assessment if n=1 or otherwise if adviceonstock is TRUE
+  group_by(stockkeylabelold, assessmentyear) %>% 
+  mutate(n = n_distinct(paste0(stockkeylabelold, assessmentyear, adviceonstock))) %>% 
+  # filter(n == 1 | ((n > 1 & adviceonstock == TRUE) | (n > 1 & benchmark == TRUE))) %>% 
+  filter(n == 1 | (assessmentdate == max(assessmentdate, na.rm=TRUE)) ) %>% 
+  # filter(!grepl("benchmark", purpose)) %>% 
+  
   filter(assessmentyear >= 2008) %>% 
   ungroup()
+
+# d %>% filter(stockkeylabelold =="mac-nea", assessmentyear >= 2015) %>% View()
 
 # create subset for assessments
 e <-
   iAssess %>% 
+  group_by(assessmentyear) %>% 
   filter(stockkeylabelold %in% unique(d$stockkeylabelold)) %>% 
-  filter(assessmentyear == 2018) %>% 
-  filter(year >= 2008) %>% 
+  filter(assessmentyear == max(assessmentyear, na.rm=TRUE)) %>% 
   filter(year <= assessmentyear) %>% 
-  filter(adviceonstock == TRUE)
+  
+  # count number of assessments per year; keep assessment if n=1 or otherwise if adviceonstock is TRUE
+  group_by(stockkeylabelold, assessmentyear) %>% 
+  mutate(n = n_distinct(paste0(stockkeylabelold, assessmentyear, adviceonstock))) %>% 
+  filter(n == 1 | (assessmentdate == max(assessmentdate, na.rm=TRUE)) ) %>% 
+  filter(year >= 2008) %>% 
+  ungroup()
+#   filter(n == 1 | (assessmentdate == max(assessmentdate, na.rm=TRUE)) )
+
+# d %>%
+#   ungroup() %>%
+#   distinct(stockkeylabelold, assessmentyear,  benchmark, adviceonstock, n, .keep_all = FALSE) %>%
+#   arrange(stockkeylabelold, assessmentyear, benchmark, adviceonstock, n) %>%
+#   View()
+
 
 ```
 
@@ -79,7 +103,8 @@ Fpa (blue) and Fmsy (green) reference points points as estimated in the differen
 d %>% 
   dplyr::select(stockkeylabelold, assessmentyear, fpa, fmsy) %>% 
   gather(key=var, value=value, fpa:fmsy) %>% 
-  
+  # View()
+
   ggplot(aes(x=assessmentyear)) +
   theme_publication() +
   theme(legend.title = element_blank()) +
@@ -127,6 +152,7 @@ Recommended catches (in fact: max of advised landings) presented for each of the
 
 d %>% 
   dplyr::select(stockkeylabelold, tacyear, adviceonstock, advisedlandingsmax) %>% 
+
   ggplot(aes(x=tacyear)) +
   theme_publication() +
   theme(legend.title = element_blank()) +
@@ -141,7 +167,7 @@ d %>%
   expand_limits(y=0) + 
   labs(y="Advice Landings Max (tonnes)") +
   scale_color_manual(values = c("red", "blue")) +
-  scale_linetype_manual(values = c("solid", "blank")) +
+  # scale_linetype_manual(values = c("solid", "blank", "dotted")) +
   facet_wrap(~stockkeylabelold, scales="free_y")
 
 ```
@@ -155,7 +181,8 @@ Comparison of the most recent estimates of stock size from the 2018 assessments 
 d %>% 
   dplyr::select(stockkeylabelold, assessmentyear, adviceonstock, ssbay) %>% 
   rename(year = assessmentyear) %>% 
-  
+  View()
+
   ggplot(aes(x=year)) +
   theme_publication() +
   theme(legend.title = element_blank()) +
@@ -169,6 +196,42 @@ d %>%
   expand_limits(y=0) + 
   labs(y="SSB") +
   scale_color_manual(values = c("red", "blue")) +
+  facet_wrap(~stockkeylabelold, scales="free_y")
+```
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+# now based on assessment
+t <-
+  e %>% 
+  filter(year == assessmentyear - 1 ) %>% 
+  mutate(colour  = paste0(adviceonstock,benchmark),
+         purpose = ifelse(grepl("bench", purpose), "benchmark", purpose),
+         purpose = ifelse(grepl("initial", purpose), "replaced", purpose))
+
+glimpse(d)
+
+e %>% 
+  group_by(stockkeylabelold) %>% 
+  filter(assessmentyear == max(assessmentyear, na.rm=TRUE)) %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, year, adviceonstock, stocksize) %>% 
+  # rename(year = assessmentyear) %>% 
+  # View()
+
+  ggplot(aes(x=year)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_point(aes(y=ssbay,
+  #                colour   = ifelse(adviceonstock==TRUE,'advice','replaced'))) +
+  geom_line(aes(y = stocksize )) +
+  geom_point(aes(y = stocksize )) +
+  
+  geom_point(data=t, aes(x=year, y=stocksize, colour=purpose)) +
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="SSB") +
+  # scale_color_manual(values = c("red", "blue")) +
   facet_wrap(~stockkeylabelold, scales="free_y")
 ```
 

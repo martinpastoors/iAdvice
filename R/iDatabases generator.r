@@ -37,6 +37,17 @@
 # 26/11/2018 added comparison to the data used by Esther Schuch
 # 20/03/2019 adapted with new data during HAWG
 # 23/03/2019 adapated after change to download data procedure
+
+# Warning messages:
+#   1: funs() is soft deprecated as of dplyr 0.8.0
+# please use list() instead
+# 
+# # Before:
+# funs(name = f(.)
+#      
+#      # After: 
+#      list(name = ~f(.))
+
 # -----------------------------------------------------------------------------------------------
 
 # rm(list=ls())
@@ -314,8 +325,8 @@ qcsexcel_to_merge <-
 # iAdvice (only model specifications)
 iadvice_to_merge <-
   iAdvice %>% 
-  dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose, 
-                stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, 
+  dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, assessmentdate,
+                purpose,  stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, 
                 adviceonstock, published) %>% 
   mutate_at(c("assessmentmodel"), funs(tolower))
 

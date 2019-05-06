@@ -24,6 +24,8 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # load the data
 load(file=paste(dropboxdir,"/rdata/iAssess.RData", sep=""))
+load(file=paste(dropboxdir,"/rdata/iAdvice.RData", sep=""))
+load(file=paste(dropboxdir,"/rdata/iSAGrefpoints.RData", sep=""))
 
 # filter(iAssess, stockkeylabel=="her.27.6a7bc", assessmentyear==2017) %>% View()
 # filter(sagdata, stockkeylabel %in% c("her-noss","her.27.1-24a514a"), assessmentyear==2017) %>% 
@@ -43,39 +45,41 @@ d <-
   #        assessmentyear>=2017) %>% 
   
   # filter(grepl("mac-nea", stockkeylabelold),
-  #        purpose %in% c("advice","benchmark","interbenchmark","withdrawn"),
-  #        assessmentyear>=2017) %>% 
+  #        purpose %in% c("advice","interbenchmark","withdrawn"),
+  #        assessmentyear>=2016) %>%
   
   # filter(grepl("hom-west", stockkeylabelold),purpose %in% c("update","bench"),assessmentyear>=2016) %>% 
   # filter(grepl("ple-nsea", stockkeylabelold) ) %>% 
   # filter(grepl("cod-347d", stockkeylabelold) ) %>% 
   
-  filter(grepl("spr-nsea", stockkeylabelold) | grepl("spr.27.3a4", stockkeylabelnew) ) %>%
-  mutate(stockkeylabelold = "spr.27.3a4") %>%
-  filter(assessmentyear >= 2015) %>%
-  mutate(recruitment = ifelse(year == assessmentyear, NA, recruitment)) %>%
+  # filter(grepl("spr-nsea", stockkeylabelold) | grepl("spr.27.3a4", stockkeylabelnew) ) %>%
+  # mutate(stockkeylabelold = "spr.27.3a4") %>%
+  # filter(assessmentyear >= 2015) %>%
+  # mutate(recruitment = ifelse(year == assessmentyear, NA, recruitment)) %>%
   
   # filter(grepl("her-irls", stockkeylabelold) ) %>% 
   # filter(grepl("her-67bc", stockkeylabelold) ) %>% 
-  # filter(grepl("her-47d3", stockkeylabelold) ) %>%
+  # filter(grepl("her-4", stockkeylabelold) ) %>%
   # filter(grepl("her-nirs", stockkeylabelold) ) %>% 
-  # filter(grepl("hom-west", stockkeylabelold) ) %>% 
+  # filter(grepl("hom-west", stockkeylabelold) ) %>%
+  filter(grepl("whb-comb", stockkeylabelold) ) %>%
   
   # filter(grepl("mac-nea|hom-west|whb-comb|her-noss", stockkeylabelold) ) %>% 
   # filter(grepl("whb", stockkeylabelold) ) %>% 
   # filter(grepl("noss", stockkeylabelold) ) %>% 
   
   ungroup() %>% 
-  filter(year             >   2000) %>% 
+  filter(year             >=   1980) %>% 
   # filter(year             >  2000) %>%  
   # filter(year             <= assessmentyear) %>% 
-  # filter(assessmentyear   >  1980) %>% 
-  filter(assessmentyear   >  2014) %>% 
+  filter(assessmentyear   >  2008) %>% 
+  # filter(assessmentyear   >  2014) %>% 
   
-  filter(purpose %in% c("advice", "update")) %>% 
+  # filter(purpose %in% c("advice", "update")) %>% 
   
   select(assessmentyear, year, stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew,
          purpose, 
+         landings, catches, 
          recruitment, lowrecruitment, highrecruitment, 
          fishingpressure, lowfishingpressure, highfishingpressure, 
          stocksize, lowstocksize, highstocksize) %>%
@@ -83,14 +87,17 @@ d <-
   mutate(purpose = ifelse(assessmentyear == max(assessmentyear) &
                                   purpose %in% c("advice","update"),
                                   "last",purpose)) %>%
-   
-  mutate(tyear     = ifelse(purpose == "advice", as.character(assessmentyear), NA),
-         tyear     = ifelse(purpose == "update", as.character(assessmentyear), tyear),
-         tyear     = ifelse(purpose == "last"  , paste(assessmentyear,sep="") ,tyear),
-         tyear     = ifelse(purpose == "withdrawn"   , paste(assessmentyear,"-W",sep="") ,tyear),
-         tyear     = ifelse(purpose == "benchmark" , paste(assessmentyear,"-B",sep="") ,tyear),
-         tyear     = ifelse(purpose == "interbenchmark" , paste(assessmentyear,"-B",sep="") ,tyear),
-         tyear     = ifelse(purpose == "alt"   , paste(assessmentyear,"-A",sep="") ,tyear)) %>%
+  # manual setting of last
+  # mutate(purpose = ifelse(assessmentyear == 2018 & purpose %in% c("advice","update"),
+  #                         "last",purpose)) %>%
+  
+  # mutate(tyear     = ifelse(purpose == "advice", as.character(assessmentyear), NA),
+  #        tyear     = ifelse(purpose == "update", as.character(assessmentyear), tyear),
+  #        tyear     = ifelse(purpose == "last"  , paste(assessmentyear,sep="") ,tyear),
+  #        tyear     = ifelse(purpose == "withdrawn"   , paste(assessmentyear,"-W",sep="") ,tyear),
+  #        tyear     = ifelse(purpose == "benchmark" , paste(assessmentyear,"-B",sep="") ,tyear),
+  #        tyear     = ifelse(purpose == "interbenchmark" , paste(assessmentyear,"-B",sep="") ,tyear),
+  #        tyear     = ifelse(purpose == "alt"   , paste(assessmentyear,"-A",sep="") ,tyear)) %>%
 
   mutate(tyear     = as.character(assessmentyear),
          tyear     = substr(tyear,3,4)) %>% 
@@ -123,6 +130,15 @@ withdrawn <-
   select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, year, stocksize, lowstocksize, highstocksize, lastfishingpressure=fishingpressure, lowfishingpressure, highfishingpressure, 
          lastrecruitment = recruitment, lowrecruitment, highrecruitment, purpose)
 
+rp <-
+  sagrefpoints %>% 
+  filter(stockkeylabelold %in% unique(d$stockkeylabelold)) %>% 
+  filter(assessmentyear == lastyear) %>% 
+  distinct(stockkeylabel, stockkeylabelold, stockkeylabelnew, fpa, fmsy, blim, msybtrigger)
+
+# d %>% filter(assessmentyear == 1983)  %>% View()
+
+
 # scale to last year ?
 # d <-
 #   d %>% 
@@ -140,11 +156,12 @@ p1 <-
   # View()
 
   ggplot(aes(year,stocksize, group=paste0(tyear,purpose))) +
+  # ggplot(aes(year,stocksize, group=tyear)) +
   
   theme_publication() +
   theme(legend.title=element_blank(),
         axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
-        plot.margin      = unit(c(0,0,0,0), "cm"), 
+        plot.margin      = unit(c(0.2,0.2,0.2,0.2), "cm"), 
         axis.text.y = element_text(size=9),
         # strip.background = element_blank(),
         legend.position = "null") +
@@ -155,8 +172,15 @@ p1 <-
   
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
-  
-  geom_dl(aes(label  = tyear, colour = purpose),
+
+  geom_hline(data=rp, aes(yintercept=blim), colour="gray10", linetype = "dashed") +
+  geom_hline(data=rp, aes(yintercept=msybtrigger), colour="gray10", linetype = "dotted") +
+  geom_text (data=rp, aes(x=2000, y=blim, label="blim"), 
+             colour="gray10", inherit.aes = FALSE, hjust=0, vjust=0) +
+  geom_text (data=rp, aes(x=2000, y=msybtrigger, label="msybtrigger"), 
+             colour="gray10", inherit.aes = FALSE, hjust=0, vjust=0) +
+
+  geom_dl(aes(label  = tyear, colour = purpose, group=paste0(tyear,purpose)),
           method = list(dl.combine("last.points"), cex = 0.8)) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
@@ -168,6 +192,7 @@ p1 <-
   # xlim(2005,2020) +
   labs(x = NULL, y = NULL , title = "SSB")  +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
+  # facet_grid(stockkeylabelold ~ purpose, scales="free_y")
 
 
 # plot f
@@ -181,7 +206,7 @@ p2 <-
   theme(legend.title=element_blank(),
         axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
         axis.text.y = element_text(size=9),
-        plot.margin      = unit(c(0,0,0,0), "cm"), 
+        plot.margin      = unit(c(0.2,0.2,0.2,0.2), "cm"), 
         # strip.background = element_blank(),
         legend.position = "null") +
   
@@ -190,8 +215,16 @@ p2 <-
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
   
-  # geom_dl(aes(label  = tyear, colour = purpose), 
-  #         method = list(dl.combine("last.points"), cex = 0.8)) +
+  geom_dl(aes(label  = tyear, colour = purpose),
+          method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  geom_hline(data=rp, aes(yintercept=fmsy), colour="gray10", linetype = "dotted") +
+  geom_text (data=rp, aes(x=2000, y=fmsy, label="fmsy"), 
+             colour="gray10", inherit.aes = FALSE, hjust=0, vjust=0) +
+
+  geom_hline(data=rp, aes(yintercept=fpa), colour="gray10", linetype = "dashed") +
+  geom_text (data=rp, aes(x=2000, y=fpa, label="fpa"), 
+             colour="gray10", inherit.aes = FALSE, hjust=0, vjust=0) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
   scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
@@ -203,12 +236,12 @@ p2 <-
   labs(x = NULL, y = NULL , title = "F")   +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
 
-plot_grid(p1 + theme(legend.position  = "none",
-                     axis.title       = element_blank(),
-                     strip.background = element_rect(colour=NA, fill=NA),
-                     strip.text       = element_text(colour=NA)),
-          p2 + theme(axis.title       = element_blank()),
-          ncol=2, align = 'h', rel_widths = c(3.5,3))
+# plot_grid(p1 + theme(legend.position  = "none",
+#                      axis.title       = element_blank(),
+#                      strip.background = element_rect(colour=NA, fill=NA),
+#                      strip.text       = element_text(colour=NA)),
+#           p2 + theme(axis.title       = element_blank()),
+#           ncol=2, align = 'h', rel_widths = c(3.5,3))
 
 
 # filter(iAssess, stockkeylabelold == "cod-iceg") %>% View()
@@ -225,17 +258,17 @@ p3 <-
   theme(legend.title=element_blank(),
         axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
         axis.text.y = element_text(size=9),
-        plot.margin      = unit(c(0,0,0,0), "cm"), 
+        plot.margin      = unit(c(0.2,0.2,0.2,0.2), "cm"), 
         # strip.background = element_blank(),
         legend.position = "null") +
   
-  # geom_ribbon(data=last, aes(x=year, ymin=lowrecruitment, ymax=highrecruitment, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
+  geom_ribbon(data=last, aes(x=year, ymin=lowrecruitment, ymax=highrecruitment, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   
   geom_line(aes(colour = purpose, size=purpose) ) +
   # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
   
-  # geom_dl(aes(label  = tyear, colour = purpose), 
-  #         method = list(dl.combine("last.points"), cex = 0.8)) +
+  geom_dl(aes(label  = tyear, colour = purpose),
+          method = list(dl.combine("last.points"), cex = 0.8)) +
   
   scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
   scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
@@ -246,6 +279,15 @@ p3 <-
   # xlim(2005,2020) +
   labs(x = NULL, y = NULL , title = "recruitment")   +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
+
+plot_grid(p2 + theme(legend.position  = "none",
+                     axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          p3 + theme(axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=2, align = 'h', rel_widths = c(3.5,3.5))
 
 
 plot_grid(p1 + theme(legend.position  = "none", 
@@ -260,3 +302,43 @@ plot_grid(p1 + theme(legend.position  = "none",
 
 
 # filter(iAssess, stockkeylabelold == "cod-iceg") %>% View()
+
+
+
+
+
+# landings/catches
+d %>% 
+  dplyr::select(stockkeylabelold, stockkeylabel, assessmentyear, year, purpose, tyear, landings, catches) %>% 
+  gather(key=variable, value=value, landings:catches) %>%
+  filter(!is.na(value)) %>% 
+  
+  filter(assessmentyear <= 1995) %>% 
+  
+  ggplot(aes(x=year,y=value, group=paste0(tyear,purpose, variable))) +
+  
+  theme_publication() +
+  theme(legend.title=element_blank(),
+        axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
+        axis.text.y = element_text(size=9),
+        plot.margin      = unit(c(0.2,0.2,0.2,0.2), "cm"), 
+        # strip.background = element_blank(),
+        legend.position = "null") +
+  
+  # geom_ribbon(data=last, aes(x=year, ymin=lowrecruitment, ymax=highrecruitment, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
+  
+  geom_line(aes(colour = purpose, size=purpose) ) +
+  # geom_line(aes(colour = purpose, size=purpose, linetype=purpose) ) +
+  
+  geom_dl(aes(label  = tyear, colour = purpose),
+          method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  scale_colour_manual  (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
+  scale_fill_manual    (values=c(last = "red",advice="black",interbenchmark = "green",benchmark = "blue", withdrawn = "darkgreen", alt="gray")) +
+  scale_linetype_manual(values=c(last="solid",advice="solid",interbenchmark = "dashed",benchmark ="dashed",withdrawn = "dotdash",   alt="dotted")) +
+  scale_size_manual    (values=c(last= 1.5,   advice=0.8,    interbenchmark = 1.2,    benchmark = 1.2,    withdrawn = 0.8,         alt=0.8)) +
+  
+  expand_limits(y = 0) +
+  # xlim(2005,2020) +
+  labs(x = NULL, y = NULL , title = "recruitment")   +
+  facet_grid(variable ~ ., scales="free_y")

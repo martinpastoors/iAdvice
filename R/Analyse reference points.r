@@ -1,7 +1,8 @@
 # -----------------------------------------------------------------------------------------------
-# analyse benchmarks
+# analyse reference points
 #
 # 15/11/2018 first coding
+# 03/04/2019 added reference points for specific stocks
 # -----------------------------------------------------------------------------------------------
 
 library(tidyverse)     # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
@@ -20,19 +21,19 @@ advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # load(file=paste(advicedir, "/rdata/iStock.RData",sep=""))
 # load(file=paste(advicedir, "/rdata/qcsexcel.RData",sep=""))
-# load(file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
+load(file=paste(advicedir, "/rdata/iAdvice.RData",sep=""))
 
 # -----------------------------------------------------------------------------------------
 # Plot of number of reference points
 # -----------------------------------------------------------------------------------------
 
 iAdvice %>% 
-  filter(assessmentyear <= 2000) %>%
+  filter(assessmentyear >= 2000) %>%
   filter(!grepl("bench", purpose)) %>% 
   
   # add the reference points from sagrefpoints
-  bind_rows(sagrefpoints) %>% 
-  filter(assessmentyear >= 1997) %>% 
+  # bind_rows(sagrefpoints) %>% 
+  # filter(assessmentyear >= 1997) %>% 
   
   group_by(assessmentyear) %>% 
   summarize(flim = sum(!is.na(flim)),
@@ -87,3 +88,38 @@ iAdvice %>%
   facet_wrap(~type)
 
 
+# -----------------------------------------------------------------------------------------
+# Plot reference points by stock
+# -----------------------------------------------------------------------------------------
+
+mystock <- "hom-west"
+
+iAdvice %>% 
+  filter(stockkeylabelold == mystock) %>% 
+  filter(assessmentyear >= 2000) %>%
+  filter(!grepl("bench", purpose)) %>% 
+  
+  # add the reference points from sagrefpoints
+  # bind_rows(sagrefpoints) %>% 
+  # filter(assessmentyear >= 1997) %>% 
+  
+  select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, 
+         flim, fpa, fmsy, blim, bpa, msybtrigger) %>% 
+  gather(key=variable, value=value, flim:msybtrigger) %>% 
+  mutate(type=case_when(
+           variable %in% c("blim","bpa","msybtrigger") ~ "biomass", 
+           variable %in% c("flim","fpa","fmsy")        ~ "f"),
+         type2 = case_when(
+           grepl("lim", variable)  ~ "lim",
+           grepl("pa", variable)   ~ "pa",
+           grepl("msy", variable)  ~ "msy"),
+         type2 = factor(type2, levels=c("lim","pa","msy"))) %>%
+  
+  ggplot(aes(x=assessmentyear, y=value)) +
+  theme_publication() +
+  theme(legend.position = "none") +
+  expand_limits(y=0) +
+  geom_line(aes(colour=factor(variable))) +
+  geom_point(aes(colour=factor(variable))) +
+  labs(title = paste0("Reference points: ", mystock)) +
+  facet_grid(type~type2, scales="free_y")

@@ -518,7 +518,7 @@ d.metrics_bystock <-
 
 # Calculations of Pairwise Comparison of Mean and scale jumps ==========================================
 
-pairwise_comparisons <- function(removelastyears=0, numberofyears=10) {
+pairwise_comparisons <- function(removelastyears=0, numberofyears=10, threshold=0.10) {
   
   # Create a set of assessment pairs: two subsequent assessments  
   d.pairs <-
@@ -594,18 +594,26 @@ pairwise_comparisons <- function(removelastyears=0, numberofyears=10) {
     spread(key=label, value=value) %>% 
     mutate(phi            = (prior-last)/last,
            phi_abs        = abs(phi),
-           assessmentyear = as.integer(substr(assessmentpair, 6,9))) 
+           assessmentyear = as.integer(substr(assessmentpair, 6,9)), 
+           scale_jump     = ifelse(phi_abs  > threshold, TRUE, NA),
+           scale_jump     = ifelse(phi_abs <= threshold, FALSE, scale_jump)) %>% 
+    group_by(stock, variable) %>% 
+    mutate(scale_jump     = ifelse(row_number() == 1, NA, scale_jump),
+           removelastyears= removelastyears, 
+           numberofyears  = numberofyears, 
+           threshold      = threshold)
   
-  res <- list("d.pcm"= d.pcm, 
-              "d.pairwise.roughly"=d.pairwise.roughly,
-              "d.pairwise" =d.pairwise)
+  res <- list("d.pcm"              = d.pcm, 
+              "d.pairwise.roughly" = d.pairwise.roughly,
+              "d.pairwise"         = d.pairwise)
   
   return(res)
 
 } # End of pairwise_comparisons function
 
-tmp <- pairwise_comparisons(removelastyears = 0, numberofyears=5)
+tmp <- pairwise_comparisons(removelastyears = 0, numberofyears=5, threshold = 0.1)
 
+# tmp$d.pcm %>% View()
 
 # REMOVE FROM HERE !!
 
@@ -1146,13 +1154,13 @@ res$d.pairwise %>%
 
 ```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
 
-res <- pairwise_comparisons(removelastyears = 0, numberofyears=10)
+res <- pairwise_comparisons(removelastyears = 0, numberofyears=10, threshold = 0.10)
 
-threshold <- 0.10
+# threshold <- 0.10
 
 # plot scale jumps between assessments
 res$d.pcm %>% 
-  distinct(stock, variable, assessmentyear, phi) %>%
+  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
   
@@ -1182,7 +1190,7 @@ res$d.pcm %>%
   geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
   
   geom_line (aes(colour=factor(decade))) +
-  geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( scale_jump, 0.3, 0.0001))) +
   # geom_point(aes(colour=factor(decade), size = abs(value) )) +
   
   geom_point(data=filter(d.benchmarks, benchmark == 1),
@@ -1218,7 +1226,7 @@ threshold <- 0.10
 # plot scale jumps between assessments vs assessment methods
 
 res$d.pcm %>% 
-  distinct(stock, variable, assessmentyear, phi) %>%
+  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
   
@@ -1271,14 +1279,12 @@ res$d.pcm %>%
 ```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
 
 
-res <- pairwise_comparisons(removelastyears = 0, numberofyears=10)
-
-threshold <- 0.10
+res <- pairwise_comparisons(removelastyears = 0, numberofyears=10, threshold=0.1)
 
 # plot scale jumps between assessments vs assessment methods
 
 res$d.pcm %>% 
-  distinct(stock, variable, assessmentyear, phi) %>%
+  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
   mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
   gather(key=metric, value=value, c(phi)) %>% 
   
@@ -1318,7 +1324,7 @@ res$d.pcm %>%
   geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
   
   geom_line (aes(colour=factor(decade))) +
-  geom_point(aes(colour=factor(decade), size = ifelse( abs(value) > threshold, 0.3, 0.0001))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( scale_jump, 0.3, 0.0001))) +
   
   geom_point(data=filter(d.benchmarks, benchmark == 1),
             aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
@@ -1335,6 +1341,121 @@ res$d.pcm %>%
   
   labs(x=" ", y="") +
   facet_wrap(~stock)
+
+# filter(d.assessments, benchmark == 1) %>% View()
+
+```
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+
+# plot scale jumps with different settings for number of years and thresholds
+
+d.pcm <- data.frame()
+
+for (ny in c(5, 10, 15)) {
+  for (nt in c(0.05, 0.1, 0.15, 0.2)) {
+    res <- pairwise_comparisons(removelastyears = 0, numberofyears=ny, threshold=nt)
+    d.pcm <- bind_rows(d.pcm, res$d.pcm)
+  }
+}
+
+
+d.pcm %>% 
+  filter(stock == "cod (north sea)") %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
+  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
+  gather(key=metric, value=value, c(phi)) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0.5, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0.5, margin = margin(2,0,2,0, "mm"), angle = 0),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
+  
+  geom_line (aes(colour=factor(decade))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( scale_jump, 0.3, 0.0001))) +
+  
+  # coord_cartesian(xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  coord_cartesian(ylim=c(-1, 1),
+                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  
+  # ggMarginal(data=d.assessments, type="histogram")
+  scale_fill_manual(values = myBlues) +
+        
+  scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  
+  labs(x=" ", y="") +
+  facet_grid(threshold ~ numberofyears)
+
+# filter(d.assessments, benchmark == 1) %>% View()
+
+```
+
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+
+# plot number of scale jumps with different settings for number of years and thresholds
+
+d.pcm <- data.frame()
+
+for (ny in c(5, 10, 15)) {
+  for (nt in c(0.05, 0.1, 0.15, 0.2)) {
+    res <- pairwise_comparisons(removelastyears = 0, numberofyears=ny, threshold=nt)
+    d.pcm <- bind_rows(d.pcm, res$d.pcm)
+  }
+}
+
+
+d.pcm %>% 
+  filter(stock == "cod (north sea)") %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
+  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
+  gather(key=metric, value=value, c(phi)) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0.5, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0.5, margin = margin(2,0,2,0, "mm"), angle = 0),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
+  
+  geom_line (aes(colour=factor(decade))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( scale_jump, 0.3, 0.0001))) +
+  
+  # coord_cartesian(xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  coord_cartesian(ylim=c(-1, 1),
+                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  
+  # ggMarginal(data=d.assessments, type="histogram")
+  scale_fill_manual(values = myBlues) +
+        
+  scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  
+  labs(x=" ", y="") +
+  facet_grid(threshold ~ numberofyears)
 
 # filter(d.assessments, benchmark == 1) %>% View()
 
@@ -1447,7 +1568,7 @@ t3 %>%
 
 
 d.jumps.byyear %>% 
-  filter(assessmentyear >= 1990) %>% 
+  filter(assessmentyear >= 1982) %>% 
   
   ggplot(aes(x=assessmentyear, y=ratio)) +
   theme_publication() +
@@ -1469,3 +1590,32 @@ d.jumps.byyear %>%
 
 
 *`r fig_nums("jumpratio")`*
+
+
+```{r jumpratio, echo=FALSE, fig.asp=0.5, fig.align="center", message=FALSE, warning=FALSE}
+
+
+d.assessments%>% 
+  filter(assessmentyear <= 2018) %>% 
+  group_by(assessmentyear) %>% 
+  summarize(ncpueseries = mean(ncpueseries, na.rm=TRUE),
+            nsurveyseries = mean(nsurveyseries, na.rm=TRUE)) %>% 
+  gather(key=type, value=n, ncpueseries:nsurveyseries) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=n, group=type)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(size=8, face="bold", hjust=1, margin = margin(2,0,2,0, "mm")),
+    strip.placement = "outside",
+    legend.title    = element_blank()
+  ) +
+  # theme(legend.position  = "none") + 
+  geom_line(aes(colour=type)) +
+  labs(x="", y="avg") 
+
+
+
+```
