@@ -108,6 +108,8 @@ iSAGstock_astext_complete <-
 
 save(iSAGstock_astext_complete, file=paste0(dropboxdir, "/rdata/iSAGstock_astext_complete", ".RData"))
 
+
+
 # Convert to dataset with appropriate field types
 iSAGstock <-
   iSAGstock_astext_complete %>% 
@@ -163,6 +165,11 @@ iSAGstock <-
     stockkeylabel    = ifelse(stockkeylabel == "ple-nsea" & assessmentyear %in% 2013:2014, "ple-nsea2", stockkeylabel)
   ) %>% 
   
+  # keep only the most recent assessment (in case of more than one assessment)
+  group_by(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
+  mutate(assessmentkey = as.numeric(assessmentkey)) %>% 
+  filter(assessmentkey == max(assessmentkey, na.rm=TRUE) ) %>% 
+  
   # now do the stockkey transformations
   dplyr::select(-stockkey, -icesareas) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
@@ -176,6 +183,7 @@ iSAGstock <-
 
 # Save dataset to file
 save(iSAGstock, file=paste0(dropboxdir, "/rdata/iSAGstock", ".RData"))
+
 
 
 # =====================================================================================

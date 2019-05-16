@@ -37,6 +37,8 @@
 # 26/11/2018 added comparison to the data used by Esther Schuch
 # 20/03/2019 adapted with new data during HAWG
 # 23/03/2019 adapated after change to download data procedure
+# 06/05/2019 dplyr update. Changed "funs" to "list" in mutate_at functions 
+# 15/05/2019 removed double assessments from SAG
 
 # Warning messages:
 #   1: funs() is soft deprecated as of dplyr 0.8.0
@@ -88,13 +90,13 @@ iAdvice <-
               "fmax", "f01", "fmed", "f35spr", "flim", "fpa", "fmsy",
               "blim", "bpa", "msybtrigger",
               "m1", "m5"),
-            funs(as.numeric)) %>%
+            list(as.numeric)) %>%
   mutate_at(c("tacyear", "assessmentyear", "stockkey", "firstyearofdata", "ncpueseries","nsurveyseries"),
-            funs(as.integer)) %>% 
+            list(as.integer)) %>% 
   mutate_at(c("purpose", "speciescommonname", "stockkeylabel","stockkeylabelold","stockkeylabelnew",
               "stocksizeunits","fishingpressureunits"), 
-            funs(tolower)) %>% 
-  mutate_at(c("benchmark", "published"), funs(as.logical)) %>% 
+            list(tolower)) %>% 
+  mutate_at(c("benchmark", "published"), list(as.logical)) %>% 
   
   mutate(
     adviceonstock = ifelse(toupper(adviceonstock) == "Y", TRUE, adviceonstock),
@@ -116,7 +118,7 @@ iSpecies <-
     col_names=TRUE, 
     col_types="text") %>%
   mutate_at(c("speciescommonname","trophicguild","fisheriesguild","sizeguild"), 
-            funs(tolower)) %>%
+            list(tolower)) %>%
   group_by(speciesfaocode, speciesscientificname, speciescommonname) %>%
   arrange(speciesfaocode) 
 
@@ -181,17 +183,17 @@ qcsexcel <-
               "catches", "landings","discards","ibc","unallocatedremovals",
               "fishingpressure", "lowfishingpressure","highfishingpressure",
               "fdiscards","flandings","fibc","funallocated"), 
-            funs(as.numeric)) %>% 
+            list(as.numeric)) %>% 
   
   # make integer
-  mutate_at(c("stockkey", "assessmentyear", "year", "recruitmentage"),    funs(as.integer)) %>% 
+  mutate_at(c("stockkey", "assessmentyear", "year", "recruitmentage"),    list(as.integer)) %>% 
   
   # make lowercase
   mutate_at(c("recruitmentdescription", "unitofrecruitment",  
               "stocksizedescription", "stocksizeunits", 
               "catcheslandingsunits",
               "fishingpressuredescription", "fishingpressureunits",
-              "purpose"),    funs(tolower)) %>% 
+              "purpose"),    list(tolower)) %>% 
 
 
   # distinct rows only
@@ -201,7 +203,7 @@ qcsexcel <-
   select(-assessmentdate)  %>% 
   
   # make logical
-  mutate_at(c("published"),  funs(as.logical)) 
+  mutate_at(c("published"),  list(as.logical)) 
   
 save(qcsexcel, file=paste(dropboxdir, "/rdata/qcsexcel.RData",sep=""))
 
@@ -235,6 +237,9 @@ sag <-
   # remove custom fields for now
   dplyr::select(-starts_with("custom")) %>% 
   
+  # remove assessmentkey (prevents appropriate merging)
+  dplyr::select(-assessmentkey) %>% 
+  
   # remove all data prior to 2013
   filter(assessmentyear >= 2013) 
 
@@ -245,20 +250,23 @@ sag <-
 # load SAG reference points (see: DownloadDataFromSAG.r)
 # -----------------------------------------------------------------------------------------
 
+# DOES THIS INCLUDE REF POINTS FOR NON-ADVICE PURPOSES?
+
 sagrefpoints <- 
   get(load(file=paste(dropboxdir, "/rdata/iSAGrefpoints.RData",sep=""))) %>% 
-  select(-stockkey) %>% 
-  left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
-  left_join(iStockkey, by="stockkey") %>% 
+  select(-stockkey, -assessmentkey) %>% 
+  # left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
+  # left_join(iStockkey, by="stockkey") %>% 
   mutate_at(c("flim","fpa","fmsy", "fmanagement", 
               "blim","bpa","msybtrigger", "bmanagement"), 
-            funs(as.numeric)) %>% 
-  mutate_at(c("assessmentyear", "recruitmentage"), funs(as.integer)) 
+            list(as.numeric)) %>% 
+  mutate_at(c("assessmentyear", "recruitmentage"), list(as.integer)) 
 
 
 # save(sagrefpoints, file=paste(dropboxdir, "/rdata/iSAGrefpoints.RData",sep=""))
 
 # sagrefpoints %>% filter(grepl("her"))
+# sagrefpoints %>% group_by(stockkeylabel, stockkey)
 
 
 # -----------------------------------------------------------------------------------------
@@ -322,19 +330,33 @@ qcsexcel_to_merge <-
 
 # unique(qcsexcel_to_merge$source)
 
+
 # iAdvice (only model specifications)
 iadvice_to_merge <-
   iAdvice %>% 
   dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, assessmentdate,
                 purpose,  stockarea, assessmentmodel, benchmark, assessmentscale, nsurveyseries, ncpueseries, 
                 adviceonstock, published) %>% 
-  mutate_at(c("assessmentmodel"), funs(tolower))
+  mutate_at(c("assessmentmodel"), list(tolower)) %>% 
+  ungroup()
+
+
+# iAssess %>% filter(stockkeylabelold == "mac-nea", assessmentyear == 2016, purpose=="replaced") %>% View()
+# iadvice_to_merge %>% filter(stockkeylabelold == "mac-nea", assessmentyear == 2016, purpose=="replaced") %>% View()
+# t1 <- iadvice_to_merge %>% filter(stockkeylabelold == "mac-nea", assessmentyear == 2016, purpose=="replaced") %>% 
+#   dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose, assessmentmodel)
+# t2 <- bind_rows(sag_to_merge, qcsexcel_to_merge) %>% 
+#   filter(stockkeylabelold == "mac-nea", assessmentyear == 2016, purpose=="replaced", year == 2015) %>% 
+#   dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose, source)
+# full_join(t1, t2, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>%
+#   View()
 
 
 # generate iAssess
 iAssess <-
   
   bind_rows(sag_to_merge, qcsexcel_to_merge) %>% 
+  ungroup() %>% 
   
   # add information from iAdvice and add source if not already existing
   
@@ -346,11 +368,11 @@ iAssess <-
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
               "stocksizeunits", "stocksizedescription",
               "fishingpressureunits", "fishingpressuredescription",
-              "catcheslandingsunits"), funs(tolower(str_trim(., side="both")))) %>% 
+              "catcheslandingsunits"), list(stringr::str_trim)) %>% 
   mutate_at(c("unitofrecruitment", "recruitmentdescription",
               "stocksizeunits", "stocksizedescription",
               "fishingpressureunits", "fishingpressuredescription",
-              "catcheslandingsunits"), funs(str_trim(.))) %>% 
+              "catcheslandingsunits"), list(tolower)) %>% 
   
   # do unit conversions
   mutate(
