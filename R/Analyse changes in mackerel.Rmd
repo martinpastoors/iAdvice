@@ -1,0 +1,806 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# Analyse changes in mackerel.Rmd
+#
+# 07/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
+# 10/01/2018 made small changes to the table
+# 04/05/2019 updated for WKRRMAC 2019; focus on mackerel
+# 06/05/2019 now only for mackerel
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(tidyverse) # for piping and easy coding
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(RColorBrewer) # colours
+library(lubridate)
+library(scales)
+library(directlabels)  # for printing labels at end of geom lines
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+# create subset for advice
+adv <-
+  iAdvice %>% 
+  
+  filter(grepl("mac-67|mac-nea", stockkeylabelold)) %>%
+  filter(assessmentyear >= 2008) %>% 
+  
+  # remove 2019 assessment (not yet carried out)
+  filter(assessmentdate != 43711) %>% 
+  
+  # count number of assessments per year; keep assessment if n=1 or otherwise if adviceonstock is TRUE
+  group_by(stockkeylabelold, assessmentyear) %>% 
+  mutate(n       = n_distinct(paste0(stockkeylabelold, assessmentyear, adviceonstock))) %>% 
+  
+  mutate(purpose = ifelse(grepl("interbench", purpose), "benchmark", purpose)) %>% 
+  mutate(id      = paste0(stockkeylabelold, assessmentyear, assessmentdate, purpose)) %>% 
+  mutate(ayear   = substr(as.character(assessmentyear), 3,4)) %>% 
+  mutate(source  = "advice") %>% 
+  arrange(assessmentyear, assessmentdate, purpose) %>% 
+  ungroup()
+
+# adv %>% distinct(stockkeylabelold, assessmentyear, purpose) %>% View()
+
+adv_ssb <-
+  adv %>% 
+  dplyr::select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, id, assessmentyear, ayear, purpose, ssbay, source) %>% 
+  rename(stocksize = ssbay) %>% 
+  mutate(year = assessmentyear)
+
+# create subset for assessments
+ass <-
+  iAssess %>% 
+  filter(stockkeylabelold %in% unique(adv$stockkeylabelold)) %>% 
+  filter(assessmentyear %in% unique(adv$assessmentyear)) %>% 
+  filter(year <  assessmentyear) %>% 
+  filter(year >= 2000) %>% 
+  # remove 2019 assessment (not carried out yet)
+  filter(!(purpose=="advice" & assessmentyear == 2019)) %>% 
+
+  # count number of assessments per year; keep assessment if n=1 or otherwise if adviceonstock is TRUE
+  group_by(stockkeylabelold, assessmentyear) %>% 
+  mutate(n       = n_distinct(paste0(stockkeylabelold, assessmentyear, adviceonstock))) %>% 
+  mutate(purpose = ifelse(grepl("interbench", purpose), "benchmark", purpose)) %>% 
+  mutate(id      = paste0(stockkeylabelold, assessmentyear, assessmentdate, purpose)) %>% 
+  mutate(ayear   = substr(as.character(assessmentyear), 3,4)) %>% 
+  mutate(source  = "assessment") %>% 
+  arrange(assessmentyear, assessmentdate, purpose, year) %>% 
+  ungroup()
+
+ass_final <-
+  ass %>% 
+  filter(assessmentyear == 2018, purpose == "advice") 
+
+ass_bench <-
+  ass %>% 
+  filter(assessmentyear == 2019, purpose == "benchmark") 
+
+ass_5year <-
+  ass %>% 
+  group_by(assessmentyear, purpose) %>% 
+  filter(year >= (max(year, na.rm=TRUE)-4) ) %>% 
+  
+  # add the current year estimate from adv
+  bind_rows(adv_ssb) %>% 
+  arrange(assessmentyear, assessmentdate, purpose, year)
+
+ass_10year <-
+  ass %>% 
+  group_by(assessmentyear, purpose) %>% 
+  filter(year >= (max(year, na.rm=TRUE)-9) ) %>% 
+  
+  # add the current year estimate from adv
+  bind_rows(adv_ssb) %>% 
+  arrange(assessmentyear, assessmentdate, purpose, year)
+
+# ass %>% distinct(stockkeylabelold, assessmentyear, purpose) %>% View()
+
+```
+
+
+
+**Analysis of assessment and advice changes in Northeast Atlantic Mackerel**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+**Introduction**
+
+In this document an overview is presented of the ICES assessments and advice for Northeast Atlantic Mackerel. 
+The analysis is based on ICES advice database (Pastoors et al, in prep.) and the ICES stock assessment graph database ( [ICES SAG](www.http://ices.dk/marine-data/tools/Pages/stock-assessment-graphs.aspx)). The document outlines changes in reference points, changes in advice and a comparison between stock size assumed as the basis for the forecast and the most recent estimates of stock size from the 2018 assessments.    
+
+**Changes in reference points**
+
+Fpa (blue) and Fmsy (green) reference points points as estimated in the different assessment years. Note that for a number of years it was no longer deemed necessary to provide Fpa estimates, and they were consequently removed from the advice documents. In the more recent years, Fpa values have been added again on the request of ICES clients. Blim (red) and MSY Btrigger (green) reference points points as estimated in the different assessment years. 
+
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+pf <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, fpa, fmsy) %>% 
+  gather(key=var, value=value, fpa:fmsy) %>% 
+  # View()
+
+  ggplot(aes(x=assessmentyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = "right") +
+  theme(legend.direction = "vertical") +
+  
+  geom_line(aes(y=value, group=var, colour=factor(var))) +
+  geom_point(aes(y=value, group=var, colour=factor(var))) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="F", title="F reference points") +
+  scale_color_manual(values = c("green", "blue")) 
+
+
+pb <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, blim, msybtrigger) %>% 
+  gather(key=var, value=value, blim:msybtrigger) %>% 
+  
+  ggplot(aes(x=assessmentyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = "right") +
+  theme(legend.direction = "vertical") +
+  
+  geom_line(aes(y=value, group=var, colour=factor(var))) +
+  geom_point(aes(y=value, group=var, colour=factor(var))) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="SSB", title="Biomass reference points") +
+  scale_color_manual(values = c("red", "green")) 
+
+plot_grid(pf + theme(axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)), 
+          pb + theme(axis.title       = element_blank(), 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+```
+
+
+**Comparing perceived stock sizes with most recent estimates**
+
+This section is devoted to the comparison of assessments and SSB estimates from forecasts. Because there have been a number of revisions and benchmarks for mackerel, the overall picture will be gradually built up. First the assessments (top) and the assessments including the SSB estimated in the forecast (bottom). The 2018 estimates of stock size (thick line) with the previous assessments (black). The year of the assessment is indicated. For each assessment, except for the 2018 assessment, only 5 years are shown. The SSB values estimated as part of the forecasts in each of the years is shown as a small dot.  
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# adv %>% 
+#   dplyr::select(stockkeylabelold, assessmentyear, adviceonstock, purpose, ssbay) %>% 
+#   rename(year = assessmentyear) %>% 
+
+  # View()
+t <-
+  ass_5year %>% 
+  dplyr::select(stockkeylabelold, assessmentyear, year, ayear, purpose, stocksize, fishingpressure, id, source) %>% 
+
+  # need to generate unique labels, otherwise geom_dl will not work
+  mutate(ayear = ifelse(purpose == "benchmark", paste0(ayear,"b"), ayear),
+         ayear = ifelse(purpose == "replaced",  paste0(ayear,"r"), ayear)) %>% 
+  filter(!is.na(stocksize)) %>% 
+  arrange(id, year) 
+
+byears <- 
+  t %>% 
+  filter(purpose=="benchmark") %>% 
+  distinct(assessmentyear)
+
+ryears <- 
+  t %>% 
+  filter(purpose=="replaced") %>% 
+  distinct(assessmentyear)
+
+p1 <-
+  t %>% 
+  filter(purpose == "advice") %>% 
+  filter(year < assessmentyear) %>% 
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize), 
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  # geom_point(data=adv_ssb, aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  expand_limits(y=0) + 
+  labs(y="SSB", x="", title="assessments") 
+
+p2 <-
+  t %>% 
+  filter(purpose == "advice") %>% 
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize), 
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  geom_point(data=filter(adv_ssb, purpose=="advice"), aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  expand_limits(y=0) + 
+  labs(y="SSB", x="", title="assessments + forecasts") 
+
+
+plot_grid(p1 + theme(legend.position  = "none", 
+                     axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)), 
+          p2 + theme(legend.position  = "none", 
+                     axis.title       = element_blank(), 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+```
+
+**Benchmarks and revisions**
+
+Benchmark assessments have been carried out in 2014, 2017 and 2019 (blue) and are here compared with the assessment that were carried out in the same years. For benchmark assessments a "b" has been added to the year. Replaced assessments (due to errors in the assessment) have been carried out in 2015 and 2016 (red). For replaced assessments a "r" is added to the year
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# Now the benchmarks and the replaced assessments
+
+p3 <-
+  t %>% 
+  filter(assessmentyear %in% byears$assessmentyear) %>% 
+  filter(year < assessmentyear) %>% 
+  filter(purpose %in% c("advice", "benchmark")) %>% 
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize), 
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  # geom_point(data=filter(adv_ssb, purpose %in% c("advice", "benchmark")), aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  expand_limits(y=0) + 
+  labs(y="SSB", x="", title="assessments + benchmarks") 
+
+p4 <-
+  t %>% 
+  filter(assessmentyear %in% ryears$assessmentyear) %>% 
+  # filter(year < assessmentyear) %>% 
+  filter(purpose %in% c("advice", "replaced")) %>% 
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize), 
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  geom_point(data=filter(adv_ssb, purpose %in% c("advice", "replaced") & assessmentyear %in% ryears$assessmentyear), 
+             aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  expand_limits(y=0) + 
+  labs(y="SSB", x="", title="assessments + forecast + replaced assessments") 
+
+plot_grid(p3 + theme(legend.position  = "none", 
+                     axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)), 
+          p4 + theme(legend.position  = "none", 
+                     axis.title       = element_blank(), 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+```
+
+**Assessments, forecasts, benchmarks and replaced assessments all combined**
+
+The top plot shows a comparison of the 2018 assessment, the 2019 benchmark and the implicit or perceived stock trend by connecting the SSB estimated in each of the forecasts. The bottom plot shows all information combined. Superimposed are the periods using the ICA assessment with egg survey only (2008-2012) and the SAM assessment with multiple tuning series (2013-2019). 
+
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# Now the full plot
+
+p5 <-
+  t %>% 
+  filter(purpose == "advice") %>% 
+  
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize),
+            inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  geom_point(data=filter(adv_ssb, purpose=="advice"), aes(colour = purpose)) +
+  
+  # geom_line(aes(size=purpose)) +
+  geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  geom_line(data=ass_bench, aes(colour=purpose ), size=1.2) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+
+  expand_limits(y=0) + 
+  labs(y="SSB",y="", title="Assessment, benchmark & perception") 
+
+p6 <-
+  t %>% 
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize), 
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  geom_point(data=adv_ssb, aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  geom_segment(aes(x=2008, xend=2012, y=2000000, yend=2000000), colour="red", size=2) +
+  geom_segment(aes(x=2013, xend=2019, y=2000000, yend=2000000), colour="pink", size=2) +
+  geom_dl(aes(x=2008, y=1800000, label="ica"), colour="red", method = list(dl.combine("last.points") ) )  +
+  geom_dl(aes(x=2013, y=1800000, label="sam"), colour="pink", method = list(dl.combine("last.points") )) +
+
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+
+  expand_limits(y=0) + 
+  labs(y="SSB",y="", title="Northeast Atlantic mackerel") 
+
+plot_grid(p5 + theme(legend.position  = "none", 
+                     axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)), 
+          p6+ theme(legend.position  = "none", 
+                     axis.title       = element_blank(), 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+```
+
+**Uncertainty estimates**
+
+Mean + or - SD
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+# Now the plot with uncertanty
+# SE seem to be very very large. Plotted just +- SD
+
+t1 <-
+  t %>% 
+  group_by(year) %>% 
+  summarize(stocksize_mean = mean(stocksize, na.rm=TRUE),
+            stocksize_n = n(),
+            stocksize_sd = sd(stocksize, na.rm=TRUE)) %>%
+  mutate(stocksize_se = 1.645 * stocksize_mean/sqrt(stocksize_n),
+         stocksize_lb = stocksize_mean-stocksize_se,
+         stocksize_ub = stocksize_mean+stocksize_se)  
+
+t %>% 
+  ggplot(aes(x=year, y=stocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position="none") +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize),
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  # geom_point(data=filter(adv_ssb, purpose=="advice"), aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  # geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
+  # geom_line(data=ass_bench, aes(colour=purpose ), size=1.2) +
+  # geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  geom_point(data=t1, aes(x=year, y=stocksize_mean), inherit.aes = FALSE, size=1.5) +
+  geom_errorbar(data=t1, aes(x=year, 
+                             ymin=stocksize_mean-stocksize_sd, 
+                             ymax=stocksize_mean+stocksize_sd ), inherit.aes = FALSE, size=0.9) +
+  # geom_errorbar(data=t1, aes(x=year, 
+  #                            ymin=stocksize_lb, 
+  #                            ymax=stocksize_ub ), inherit.aes = FALSE) +
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.6, replaced = 0.6)) +
+  
+  expand_limits(y=0) + 
+  labs(y="SSB",y="", title="Assessments and uncertainty (SD)") 
+
+```
+
+**Retrospective stock trends relative to MSY Btrigger and Fmsy**
+
+The plots below show the retrospective stock trends relative to the MSY Btrigger and Fmsy values as used for the different assessment year.  
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# Assessments relative to and Fmsy and MSY Btrigger (defined for the assessments) 
+f <- 
+  ass_final %>% 
+  left_join(dplyr::select(adv, stockkeylabelold, assessmentyear, purpose, msybtrigger, fmsy)) %>% 
+  mutate(relstocksize = stocksize / msybtrigger,
+         relf         = fishingpressure / fmsy)
+
+
+p1b <-
+  t %>% 
+  filter(purpose == "advice") %>% 
+  filter(year < assessmentyear) %>% 
+  left_join(dplyr::select(adv, stockkeylabelold, assessmentyear, purpose, msybtrigger, fmsy)) %>% 
+  mutate(relstocksize = stocksize/msybtrigger) %>% 
+
+  ggplot(aes(x=year, y=relstocksize, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  # geom_path(data=ungroup(filter(adv_ssb, purpose == "advice")), aes(x=year, y=stocksize), 
+  #           inherit.aes = FALSE, size=0.8, linetype="dashed", colour="gray40") +
+  # geom_point(data=adv_ssb, aes(colour = purpose)) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=f, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  geom_hline(aes(yintercept=1), size=1.5, linetype="dashed") +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  expand_limits(y=0) + 
+  labs(y="SSB", x="", title="ssb relative to msy btrigger") 
+
+p1f <-
+  t %>% 
+  filter(purpose == "advice") %>% 
+  filter(year < assessmentyear) %>% 
+  left_join(dplyr::select(adv, stockkeylabelold, assessmentyear, purpose, msybtrigger, fmsy)) %>% 
+  mutate(relf = fishingpressure/fmsy) %>% 
+
+  ggplot(aes(x=year, y=relf, group=id, colour=purpose)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_line(aes(size=purpose)) +
+  geom_line(data=f, aes(colour=purpose ), size=1.5) +
+  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+  
+  geom_hline(aes(yintercept=1), size=1.5, linetype="dashed") +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  
+  scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
+  scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +
+  expand_limits(y=0) + 
+  labs(y="SSB", x="", title="F relative to Fmsy") 
+
+
+plot_grid(p1b + theme(legend.position  = "none", 
+                     axis.title       = element_blank(),
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)), 
+          p1f + theme(legend.position  = "none", 
+                     axis.title       = element_blank(), 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+```
+
+**Changes in advice**
+
+Recommended catches (in fact: max of advised landings) presented for each of the different TAC years and relative change between years.  The light blue bars refer to replaced advice, the dark blue bars are the final advice.  
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of advised landings
+p7 <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, purpose, advisedlandingsmax) %>% 
+  filter(purpose %in% c("advice","replaced")) %>%
+  mutate(purpose = factor(purpose, levels=c("replaced","advice"))) %>% 
+
+  ggplot(aes(x=tacyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = "none") +
+  
+  # geom_hline(aes(yintercept=0), colour="black") +
+  # geom_hline(aes(yintercept=20, label="20%"), colour="blue", linetype="dashed") +
+  # geom_hline(aes(yintercept=-20, label="-20%"), colour="red", linetype="dashed") +
+  geom_bar(aes(y  = advisedlandingsmax, fill=purpose), stat="identity", position=position_dodge2(width = 0.9, preserve = "single")) +
+
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="Advised landings (max)") +
+  scale_fill_manual(values=c(advice = "blue",replaced = "lightblue")) 
+
+# plot of change in advice
+p8 <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, advisedlandingsmax) %>% 
+  filter(adviceonstock==TRUE) %>% 
+  mutate(previousadvice = lag(advisedlandingsmax),
+         percchange     = 100*((advisedlandingsmax / previousadvice) -1),
+         sign           = ifelse(percchange > 0, "pos", "neg")) %>% 
+
+  ggplot(aes(x=tacyear, y=percchange)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = "none") +
+  
+  geom_hline(aes(yintercept=0), colour="black") +
+  geom_hline(aes(yintercept=20, label="20%"), colour="blue", linetype="dashed") +
+  geom_hline(aes(yintercept=-20, label="-20%"), colour="red", linetype="dashed") +
+  geom_bar(aes(fill=sign), stat="identity") +
+  geom_text(aes(label=as.integer(percchange), colour=sign, vjust=ifelse(percchange >= 0, -0.1, 1.1)), 
+            position=position_dodge(width=0.9) ) + 
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=c(-100,100)) + 
+  labs(y="Percentage advice change") +
+  scale_fill_manual(values=c(pos = "blue",neg = "red")) +
+  scale_colour_manual(values=c(pos = "blue",neg = "red")) 
+
+
+plot_grid(p7 + theme(legend.position  = "none", 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA),
+                     axis.title.x     = element_blank() ), 
+          p8 + theme(legend.position  = "none", 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+
+
+```
+
+**'TAC' over advice and Catch over 'TAC'**
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of TAC over advice
+p9 <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, purpose, advisedlandingsmax, tal) %>% 
+  filter(purpose %in% c("advice")) %>%
+  rename(TAC=tal) %>% 
+  gather(key=variable, value=value, advisedlandingsmax:TAC) %>% 
+  
+  ggplot(aes(x=tacyear, y=value, group=variable)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  # theme(legend.position = "right") +
+  # theme(legend.direction = "vertical") +
+  
+  # geom_bar(aes(fill=variable), stat="identity", position = position_dodge2()) + 
+  geom_line(aes(colour=variable), size=1) + geom_point(aes(colour=variable), size=2) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="TAC and advice") +
+  scale_fill_manual(values=c(advisedlandingsmax = "blue",TAC = "red")) +
+  scale_colour_manual(values=c(advisedlandingsmax = "blue",TAC = "red")) 
+
+
+# plot of relative TAC over advice
+p10 <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, purpose, advisedlandingsmax, tal) %>% 
+  filter(purpose %in% c("advice")) %>%
+  rename(TAC=tal) %>% 
+  mutate(relTAC = 100 * ((TAC/advisedlandingsmax)-1),
+         sign   = ifelse(relTAC > 0, "pos", "neg")) %>% 
+
+  ggplot(aes(x=tacyear, y=relTAC)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = "none") +
+  
+  geom_hline(aes(yintercept=0), colour="black") +
+  geom_hline(aes(yintercept=20, label="20%"), colour="blue", linetype="dashed") +
+  geom_hline(aes(yintercept=-20, label="-20%"), colour="red", linetype="dashed") +
+  geom_bar(aes(fill=sign), stat="identity") +
+  geom_text(aes(label=as.integer(relTAC), colour=sign, vjust=ifelse(relTAC >= 0, -0.1, 1.1)), 
+            position=position_dodge(width=0.9) ) + 
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=c(-100,100)) + 
+  labs(y="TAC / advice") +
+  scale_fill_manual(values=c(pos = "blue",neg = "red")) +
+  scale_colour_manual(values=c(pos = "blue",neg = "red")) 
+
+
+plot_grid(p9 + theme(strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA),
+                     axis.title.x     = element_blank() ), 
+          p10 + theme(legend.position  = "none", 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+
+
+```
+
+**'TAC' over advice and Catch over 'TAC'**
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of landings over TAC
+p11 <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, purpose, tal, catches) %>% 
+  filter(purpose %in% c("advice")) %>%
+  rename(TAC=tal) %>% 
+  gather(key=variable, value=value, TAC:catches) %>% 
+  
+  ggplot(aes(x=tacyear, y=value, group=variable)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+
+  # geom_bar(aes(fill=variable), stat="identity", position = position_dodge2()) + 
+  geom_line(aes(colour=variable), size=1) + geom_point(aes(colour=variable), size=2) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="TAC and advice") +
+  scale_fill_manual(values=c(TAC = "red", catches="seagreen4")) + 
+  scale_colour_manual(values=c(TAC = "red", catches="seagreen4")) 
+
+
+# plot of relative landings over TAC
+p12 <-
+  adv %>% 
+  dplyr::select(stockkeylabelold, tacyear, adviceonstock, purpose, tal, catches) %>% 
+  filter(purpose %in% c("advice")) %>%
+  rename(TAC=tal, catch=catches) %>% 
+  mutate(relcatch = 100 * ((catch/TAC)-1),
+         sign   = ifelse(relcatch > 0, "pos", "neg")) %>% 
+
+  ggplot(aes(x=tacyear, y=relcatch)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  theme(legend.position = "none") +
+  
+  geom_hline(aes(yintercept=0), colour="black") +
+  geom_hline(aes(yintercept=20, label="20%"), colour="blue", linetype="dashed") +
+  geom_hline(aes(yintercept=-20, label="-20%"), colour="red", linetype="dashed") +
+  geom_bar(aes(fill=sign), stat="identity") +
+  geom_text(aes(label=as.integer(relcatch), colour=sign, vjust=ifelse(relcatch >= 0, -0.1, 1.1)), 
+            position=position_dodge(width=0.9) ) + 
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=c(-100,100)) + 
+  labs(y="catch / TAC") +
+  scale_fill_manual(values=c(pos = "blue",neg = "red")) +
+  scale_colour_manual(values=c(pos = "blue",neg = "red")) 
+
+
+plot_grid(p11 + theme(strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA),
+                     axis.title.x     = element_blank() ), 
+          p12 + theme(legend.position  = "none", 
+                     strip.background = element_rect(colour=NA, fill=NA),
+                     strip.text       = element_text(colour=NA)),
+          ncol=1, align = 'hv')
+
+
+
+```
+
+**Conclusions**
+
+* Historical advice and assessment data in preparation for scientific publication
+* Since 2010: four benchmark assessments (of which three available in the database) and two revisions in advice due to errors. 
+* Substantial volatility in assessment results from 2013 onwards. This is the year that the assessment was changed to SAM and using multiple tuning series. 
+* Large revision in stock perception from 2018 assessment to 2019 benchmark
+* 3 out of 10 years with a change in advice for more than 20%
+* 10 out of 10 year with the sum of unilateral TACs higher than the scientific advice !
+* Catches largely in line with the sum of the unilateral TACs. 
+
+
+**References**
+
+Pastoors, M.A. et al (*in prep*) Documenting the past of scientific advice: the ICES advice database. 
+
+**Advice tables**
+
+The tables below are the summaries of advice for the stocks mentioned in this paper. Most of the columns are self-explanatory. However, the columns 'purpose' and 'advice' have a specific meaning: purpose refers to the purpose of the advice, either used for advice (purpose is 'advice' and advice is TRUE) or the advice has been replaced or withdrawn (purpose is 'replaced' and advice is FALSE). The column SSB_STF refers to the SSB as estimated in the short term forecasts in the diferent years. All quantities are in tonnes, except for fishing mortality which is in 1/year. 
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+adv %>% 
+  dplyr::select(stock=stockkeylabelold, assessyear=assessmentyear, purpose, fpa, fmsy, blim,
+                msybtrig=msybtrigger, ssb_stf=ssbay, tacyear, fadv=fadvmax,
+                advlandings=advisedlandingsmax)  %>% 
+  mutate(msybtrig = comma_format(big.mark ="") (msybtrig)) %>% 
+  arrange(stock, assessyear) %>% 
+  pandoc.table(., 
+             style        = "simple",
+             split.tables = 180, 
+             justify      = "right",
+             missing      =".",
+             big.mark     = '', 
+             round        = c(0,0,0,2,2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0) )
+
+
+
+```
+
+
+```{r eval=FALSE, fig.align="center", fig.asp=0.7, message=FALSE, warning=FALSE, include=FALSE}
+
+d %>% 
+  dplyr::select(stock=stockkeylabelold, assessyear=assessmentyear, purpose, fpa, fmsy, blim,
+                msybtrig=msybtrigger, ssb_stf=ssbay, tacyear, fadv=fadvmax,
+                advlandings=advisedlandingsmax)  %>% 
+  mutate(msybtrig = comma_format(big.mark ="") (msybtrig)) %>% 
+  arrange(stock, assessyear) %>% 
+  write.csv(., file="advice.csv")
+
+
+```
