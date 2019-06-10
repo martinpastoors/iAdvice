@@ -42,7 +42,7 @@ today <- format(Sys.time(), '%Y%m%d')
 # which year (set year = 0 for all years)
 # =====================================================================================
 
-myyear <- 2019
+myyear <- 2018
 
 # =====================================================================================
 # generate list of assessmentkeys
@@ -110,6 +110,7 @@ save(iSAGstock_astext_complete, file=paste0(dropboxdir, "/rdata/iSAGstock_astext
 
 
 
+
 # Convert to dataset with appropriate field types
 iSAGstock <-
   iSAGstock_astext_complete %>% 
@@ -125,19 +126,19 @@ iSAGstock <-
               "fdiscards","flandings","fibc","funallocated",
               "fpa","bpa", "flim", "blim", "fmsy", "msybtrigger",
               "custom1", "custom2", "custom3", "custom4", "custom5"), 
-            funs(as.numeric)) %>% 
+            list(as.numeric)) %>% 
   
   # make integer
-  mutate_at(c("year", "assessmentyear", "recruitmentage","stockdatabaseid"), funs(as.integer)) %>%
+  mutate_at(c("year", "assessmentyear", "recruitmentage","stockdatabaseid"), list(as.integer)) %>%
   
   # make logical
-  mutate_at(c("published"),  funs(as.logical)) %>% 
+  mutate_at(c("published"),  list(as.logical)) %>% 
   
   # make lowercase
   mutate_at(c("purpose", "stockkeylabel", "unitofrecruitment", "stocksizeunits", "stocksizedescription",
               "catcheslandingsunits", "fishingpressureunits",
               "customname1", "customname2", "customname3","customname4","customname5"), 
-            funs(tolower)) %>% 
+            list(tolower)) %>% 
   
   # change -alt for stock assessments to purpose "alternative"
   mutate(purpose       = ifelse(grepl("\\-alt", stockkeylabel), "alternative", purpose), 
@@ -169,16 +170,17 @@ iSAGstock <-
   group_by(stockkey, stockkeylabel, assessmentyear, purpose) %>% 
   mutate(assessmentkey = as.numeric(assessmentkey)) %>% 
   filter(assessmentkey == max(assessmentkey, na.rm=TRUE) ) %>% 
-  
+
+  ungroup() %>% 
+
   # now do the stockkey transformations
   dplyr::select(-stockkey, -icesareas) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
-  left_join(iStockkey, by="stockkey") %>% 
+  left_join(iStockkey, by="stockkey") 
   
   # remove duplicate assessments (Careful!)
   # group_by(stockkey, stockkeylabel, assessmentyear, purpose, year) %>% 
   # filter(row_number() == 1) %>% 
-  ungroup() 
   
 
 # Save dataset to file

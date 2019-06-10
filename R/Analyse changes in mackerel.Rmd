@@ -393,12 +393,12 @@ p6 <-
   
   geom_line(aes(size=purpose)) +
   geom_line(data=ass_final, aes(colour=purpose ), size=1.5) +
-  geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
+  # geom_dl(aes(label  = ayear, group=purpose), method = list(dl.combine("last.points"), cex = 0.8)) +
   
-  geom_segment(aes(x=2008, xend=2012, y=2000000, yend=2000000), colour="red", size=2) +
-  geom_segment(aes(x=2013, xend=2019, y=2000000, yend=2000000), colour="pink", size=2) +
-  geom_dl(aes(x=2008, y=1800000, label="ica"), colour="red", method = list(dl.combine("last.points") ) )  +
-  geom_dl(aes(x=2013, y=1800000, label="sam"), colour="pink", method = list(dl.combine("last.points") )) +
+  # geom_segment(aes(x=2008, xend=2012, y=2000000, yend=2000000), colour="red", size=2) +
+  # geom_segment(aes(x=2013, xend=2019, y=2000000, yend=2000000), colour="pink", size=2) +
+  # geom_dl(aes(x=2008, y=1800000, label="ica"), colour="red", method = list(dl.combine("last.points") ) )  +
+  # geom_dl(aes(x=2013, y=1800000, label="sam"), colour="pink", method = list(dl.combine("last.points") )) +
 
   scale_colour_manual(values=c(advice = "black",benchmark = "blue",replaced = "red")) +
   scale_size_manual  (values=c(advice = 0.6, benchmark = 0.9, replaced = 0.9)) +

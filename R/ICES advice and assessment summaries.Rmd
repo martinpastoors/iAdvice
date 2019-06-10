@@ -12,6 +12,7 @@ output:
 #
 # 06/07/2018 first coding
 # 14/12/2018 updated for the new database structure
+# 01/06/2019 updated for herring advice round
 # -----------------------------------------------------------------------------------------------
 
 require("knitr")
@@ -40,46 +41,66 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
-# =====================================================================================
-# Load Stockkey and Rename data
-# =====================================================================================
+fay <- 2011
+fy  <- 2000
+lay <- 2019
+ly  <- 2019
 
-```
+# stock=c("spr-nsea","spr.27.3a4"); firstassessyear=2016;lastassessyear=2019;firstyear=2000;lastyear=2020; include.benchmark==TRUE
+# stock=c("mac-nea"); firstassessyear=2016;lastassessyear=2019;firstyear=2000;lastyear=2020; include.benchmark=TRUE; plot=c("stocksize","fishingpressure","recruitment")
 
-```{r functions,  message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-
-# stock="her-47d3"
-# firstassessyear=2014
-# lastassessyear=2018
-# firstyear=2000
-# lastyear=2020
+# d %>% filter(stockkeylabelold == "mac-nea", assessmentyear == 2019) %>% View()
+# unique(iAssess$purpose)
 
 # Function to plot historical assessments
-plot_history <- function(stock,firstassessyear,lastassessyear, firstyear, lastyear) {
+plot_history <- function(stock,firstassessyear,lastassessyear, firstyear, lastyear, include.benchmark = FALSE, 
+                         plot=c("stocksize","fishingpressure")) {
   
   d <-
     iAssess %>% 
     ungroup() %>% 
-    filter(purpose == "advice") %>% 
-    filter(stockkeylabelold == stock,
-           assessmentyear   %in% c(firstassessyear:lastassessyear), 
+    
+    {if (include.benchmark == TRUE) {
+      filter(., purpose %in% c("advice","benchmark", "interbenchmark", "bench"))
+    } else {
+      filter(., purpose %in% c("advice")) 
+    }} %>%
+    
+    filter(stockkeylabelold %in% stock | stockkeylabel %in% stock) %>% 
+    
+    filter(assessmentyear   %in% c(firstassessyear:lastassessyear), 
            year             %in% firstyear:lastyear) %>% 
     
-    mutate(tyear     = substr(as.character(assessmentyear), 3,4),
-           type      = ifelse(assessmentyear == lastassessyear, "last", "other")) %>%
+    mutate(tyear     = substr(as.character(assessmentyear), 3,4)) %>% 
+    
+    #set type
+    mutate(
+      type = ifelse(assessmentyear == lastassessyear & purpose == "advice"       , "last"      , NA),
+      type = ifelse(assessmentyear == lastassessyear & grepl("bench",purpose),  "last_bench", type),  
+      type = ifelse(assessmentyear != lastassessyear & purpose == "advice"       , "advice"    , type),
+      type = ifelse(assessmentyear != lastassessyear & grepl("bench",purpose),  "benchmark" , type),
+      type = ifelse(assessmentyear != lastassessyear & grepl("replaced",purpose) , "replaced"  , type),
+      type = ifelse(is.na(type), "other", type)) %>%
+
+    # set group
+    mutate(group = paste0(tyear, type)) %>% 
+    
     select(assessmentyear, tyear, year, stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew,
-           type, source,
+           type, group, source,
            lowrecruitment, recruitment, highrecruitment, 
            lowfishingpressure, fishingpressure, highfishingpressure, 
            lowstocksize, stocksize, highstocksize) %>%
     data.frame()
   
+  # find out what is the last assessment
+  last <- filter(d, assessmentyear == lastassessyear) %>% distinct(type) %>% as.character()
+    
   # plot stocksize
-  p1 <-
+  stocksize <-
     d %>% 
     filter(!is.na(stocksize)) %>%  
 
-    ggplot(aes(year,stocksize, group=tyear)) +
+    ggplot(aes(year,stocksize, group=group)) +
     
     theme_publication() +
     
@@ -87,133 +108,151 @@ plot_history <- function(stock,firstassessyear,lastassessyear, firstyear, lastye
           axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
           axis.text.y = element_text(size=9),
           plot.title  = element_text(size=10), 
+          plot.margin = margin(2, 2, 2, 2, "mm"),
           # strip.background = element_blank(),
           legend.position = "null") +
     
-    geom_ribbon(data=filter(d, type=="last"), 
+    geom_ribbon(data=filter(d, type==last), 
                 aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill=type), 
                 alpha=0.2) +
     geom_line(aes(colour = type, size=type, linetype=type) ) +
     
     geom_dl(aes(label  = tyear, colour = type), method = list(dl.combine("last.points"), cex = 0.8)) +
     
-    geom_hline(data=filter(iAdvice, stockkeylabelold == stock, assessmentyear == lastassessyear),
+    geom_hline(data=filter(iAdvice, stockkeylabelold %in% stock | stockkeylabel %in% stock, assessmentyear == lastassessyear),
                aes(x=assessmentyear, yintercept=blim, label="blim", vjust=-1), 
                colour="red", inherit.aes=FALSE) +
-    geom_text (data=filter(iAdvice, stockkeylabelold == stock, assessmentyear == lastassessyear),
+    geom_text (data=filter(iAdvice, stockkeylabelold %in% stock | stockkeylabel %in% stock, assessmentyear == lastassessyear),
                aes( firstyear, blim, label = "blim", vjust = -0.3, hjust = 0),
                colour="red", inherit.aes = FALSE) +
     
-    geom_hline(data=filter(iAdvice, stockkeylabelold == stock, assessmentyear == lastassessyear),
+    geom_hline(data=filter(iAdvice, stockkeylabelold %in% stock | stockkeylabel %in% stock, assessmentyear == lastassessyear),
                aes(x=assessmentyear, yintercept=msybtrigger), 
                colour="red", linetype="dashed", inherit.aes=FALSE) +
-    geom_text (data=filter(iAdvice, stockkeylabelold == stock, assessmentyear == lastassessyear),
+    geom_text (data=filter(iAdvice, stockkeylabelold %in% stock | stockkeylabel %in% stock, assessmentyear == lastassessyear),
                aes( firstyear, msybtrigger, label = "msy btrigger", vjust = -0.3, hjust = 0),
                colour="red", inherit.aes=FALSE) +
     
-    scale_colour_manual  (values=c(last = "red",other="black")) +
-    scale_fill_manual    (values=c(last = "red",other="black")) +
-    scale_linetype_manual(values=c(last="solid",other="solid")) +
-    scale_size_manual    (values=c(last= 1.0,   other=0.8)) +
+    scale_colour_manual  (values=c(last ="red",last_bench="blue",advice="black",benchmark="blue",replaced="gray40",other="gray80")) +
+    scale_fill_manual    (values=c(last = "red",last_bench="blue",advice="black",benchmark="blue",replaced="gray40",other="gray80")) +
+    scale_linetype_manual(values=c(last="solid",last_bench="solid",advice="solid",benchmark="solid",replaced="solid",other="solid")) +
+    scale_size_manual    (values=c(last= 1.2,last_bench=1.2,advice=0.8,benchmark=0.8,replaced=0.8,other=0.8)) +
     
     expand_limits(y = 0) +
     xlim(firstyear,lastyear) +
     labs(x = NULL, y = NULL , title = "stocksize")  
-
+  
   # fishingpressure
-  p2 <-
+  fishingpressure <-
     d %>% 
     filter(!is.na(fishingpressure)) %>%  
 
-    ggplot(aes(year,fishingpressure, group=tyear)) +
+    ggplot(aes(year,fishingpressure, group=group)) +
     
     theme_publication() +
     theme(legend.title=element_blank(),
           axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
           axis.text.y = element_text(size=9),
           plot.title  = element_text(size=10), 
+          plot.margin = margin(2, 2, 2, 2, "mm"),
           # strip.background = element_blank(),
           legend.position = "null") +
     
-    geom_ribbon(data=filter(d, type=="last"), 
+    geom_ribbon(data=filter(d, type==last), 
                 aes(x=year, ymin=lowfishingpressure, ymax=highfishingpressure, fill=type), 
                 alpha=0.2) +
     geom_line(aes(colour = type, size=type, linetype=type) ) +
     
     geom_dl(aes(label  = tyear, colour = type), method = list(dl.combine("last.points"), cex = 0.8)) +
 
-    geom_hline(data=filter(iAdvice, stockkeylabelold == stock, assessmentyear == lastassessyear),
+    geom_hline(data=filter(iAdvice, stockkeylabelold %in% stock | stockkeylabel %in% stock, assessmentyear == lastassessyear),
                aes(x=assessmentyear, yintercept=fmsy), 
                colour="red", linetype="dashed", inherit.aes=FALSE) +
-    geom_text (data=filter(iAdvice, stockkeylabelold == stock, assessmentyear == lastassessyear),
+    geom_text (data=filter(iAdvice, stockkeylabelold %in% stock | stockkeylabel %in% stock, assessmentyear == lastassessyear),
                aes( firstyear, fmsy, label = "fmsy", vjust = -0.3, hjust = 0),
                colour="red", inherit.aes=FALSE) +
     
-    scale_colour_manual  (values=c(last = "red",other="black")) +
-    scale_fill_manual    (values=c(last = "red",other="black")) +
-    scale_linetype_manual(values=c(last="solid",other="solid")) +
-    scale_size_manual    (values=c(last= 1.0,   other=0.8)) +
+    scale_colour_manual  (values=c(last ="red",last_bench="blue",advice="black",benchmark="blue",replaced="gray40",other="gray80")) +
+    scale_fill_manual    (values=c(last = "red",last_bench="blue",advice="black",benchmark="blue",replaced="gray40",other="gray80")) +
+    scale_linetype_manual(values=c(last="solid",last_bench="solid",advice="solid",benchmark="solid",replaced="solid",other="solid")) +
+    scale_size_manual    (values=c(last= 1.2,last_bench=1.2,advice=0.8,benchmark=0.8,replaced=0.8,other=0.8)) +
     
     expand_limits(y = 0) +
     xlim(firstyear,lastyear) +
     labs(x = NULL, y = NULL , title = "fishingpressure")  
 
   # Recruitment
-  p3 <-
+  recruitment <-
     d %>% 
     filter(!is.na(recruitment)) %>%  
 
-    ggplot(aes(year,recruitment, group=tyear)) +
+    ggplot(aes(year,recruitment, group=group)) +
     
     theme_publication() +
     theme(legend.title=element_blank(),
           axis.text.x = element_text(angle = 0, vjust = 0.5, size=9),
           axis.text.y = element_text(size=9),
+          plot.title  = element_text(size=10), 
+          plot.margin = margin(2, 2, 2, 2, "mm"),
           # strip.background = element_blank(),
           legend.position = "null") +
     
-    geom_ribbon(data=filter(d, type=="last"), 
+    geom_ribbon(data=filter(d, type==last), 
                 aes(x=year, ymin=lowrecruitment, ymax=highrecruitment, fill=type), 
                 alpha=0.2) +
     geom_line(aes(colour = type, size=type, linetype=type) ) +
     
     geom_dl(aes(label  = tyear, colour = type), method = list(dl.combine("last.points"), cex = 0.8)) +
     
-    scale_colour_manual  (values=c(last = "red",other="black")) +
-    scale_fill_manual    (values=c(last = "red",other="black")) +
-    scale_linetype_manual(values=c(last="solid",other="solid")) +
-    scale_size_manual    (values=c(last= 1.0,   other=0.8)) +
+    scale_colour_manual  (values=c(last ="red",last_bench="blue",advice="black",benchmark="blue",replaced="gray40",other="gray80")) +
+    scale_fill_manual    (values=c(last = "red",last_bench="blue",advice="black",benchmark="blue",replaced="gray40",other="gray80")) +
+    scale_linetype_manual(values=c(last="solid",last_bench="solid",advice="solid",benchmark="solid",replaced="solid",other="solid")) +
+    scale_size_manual    (values=c(last= 1.2,last_bench=1.2,advice=0.8,benchmark=0.8,replaced=0.8,other=0.8)) +
     
     expand_limits(y = 0) +
     xlim(firstyear,lastyear) +
     labs(x = NULL, y = NULL , title = "Recruitment")  
 
-  # Combined plot
-  # plot_grid(p1 + theme(legend.position  = "none", 
-  #                    axis.title       = element_blank(),
-  #                    strip.background = element_rect(colour=NA, fill=NA),
-  #                    strip.text       = element_text(colour=NA)), 
-  #         p2 + theme(axis.title       = element_blank()),
-  #         p3 + theme(axis.title       = element_blank()),
-  #         ncol=3, align = 'h')
+    if (length(plot) == 1) {
+      if ("stocksize" %in% plot ) print(stocksize)
+      if ("fishingpressure" %in% plot ) print(fishingpressure)
+      if ("recruitment" %in% plot ) print(recruitment)
 
-    plot_grid(p1, p2,  ncol=2, align = 'hv') 
-  
+    } else if (length(plot) == 2) {
+      
+      if ("stocksize" %in% plot & "fishingpressure" %in% plot) plot_grid(stocksize, fishingpressure,  ncol=2, align = 'hv') 
+      if ("stocksize" %in% plot & "recruitment" %in% plot) plot_grid(stocksize, recruitment,  ncol=2, align = 'hv') 
+      if ("recruitment" %in% plot & "fishingpressure" %in% plot) plot_grid(fishingpressure, recruitment,  ncol=2, align = 'hv') 
+
+    } else if (length(plot) == 3) {
+        plot_grid(stocksize, fishingpressure,  recruitment, ncol=length(plot), align = 'hv') 
+    }  
+
   } # End of plot_history function
 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment"), include.benchmark = TRUE) 
 
-# firstadviceyear <- 2016
-# lastadviceyear  <- 2019
-# stock           <- "her-47d3"
+
+
+# firstadviceyear <- 2016; lastadviceyear  <- 2020; stock<-c("spr-nsea","spr.27.3a4"); include.replaced <- TRUE
+# firstadviceyear <- 2016; lastadviceyear  <- 2020; stock<-c("mac-nea"); include.replaced <- TRUE
 
 # Function to plot advice overviews
-table_advice <- function(stock,firstadviceyear,lastadviceyear) {
+table_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=FALSE) {
   
   d <-
     iAdvice %>% 
-    filter(stockkeylabelold == stock, 
-           tacyear %in% firstadviceyear:lastadviceyear,
-           adviceonstock == TRUE) %>%
+    
+    filter(stockkeylabelold %in% stock | stockkeylabel %in% stock) %>% 
+    
+    filter(tacyear %in% firstadviceyear:lastadviceyear) %>% 
+    
+    {if (include.replaced == TRUE) {
+      filter(., purpose %in% c("advice","replaced"))
+    } else {
+      filter(., purpose %in% c("advice")) 
+    }} %>%
+    
     mutate(advicebasis= substr(advicebasis,1,25),
            
            advice     = ifelse(!is.na(advisedcatchmax), advisedcatchmax, advisedlandingsmax),
@@ -237,26 +276,28 @@ table_advice <- function(stock,firstadviceyear,lastadviceyear) {
            cat_c       = 100 * (catch / lag(catch, n=1) -1)
            ) %>% 
     
-    select(tacyear, advicebasis, advice, fadvmax, advicemax, tac, catch, 
+    select(stockkeylabel, tacyear, advicebasis, purpose, advice, fadvmax, advicemax, tac, catch, 
            adv_c, tac_c, cat_c,
            advicetype, tactype, catchtype) 
   
   d %>% 
-  select(1, 2, 4, 5, 6, 7, 8, 9, 10) %>%
+  select("stockkeylabel", "tacyear", "advicebasis", "purpose", "fadvmax", "advicemax", "tac", "catch") %>%
+  arrange(tacyear, desc(purpose)) %>% 
   pandoc.table(., 
                style        = "simple",
                split.tables = 200, 
                justify      = "right",
                missing      =" ",
                big.mark     = '', 
-               round        = c(0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+               round        = c(0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
 }
 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
 
 ```
 
 
-**Summary of ICES 2018 advice and assessments**
+**Summary of ICES 2019 assessments and advice**
 
 Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
 
@@ -278,493 +319,366 @@ The overviews are based on two databases that have been developed as part of a m
 
 ## North Sea herring
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 
 s   <- "her-47d3"
-fay <- 2010; lay <- 2018
-fy  <- 2000; ly  <- 2018
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               
+             plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
 ```
+
+The assessment of North Sea herring was benchmarked in February 2018. There have been some revisions in the model and in the data that is being used for North Sea herring. Most important it the way of handling natural mortality estimates. This is one of the few assessments where natural mortality is derived from the multispecies model of the North Sea. This multispecies model is rerun every three years leading  to new estimates of natural mortality for the whole time-series. Because of changes in the multispecies model and in the underlying data for predator species (e.g. hake, cod, saithe), the natural mortality estimates of herring have been revised upwards and downwards several times. This then also leads to rescaling of the estimates of stock size and fishing mortality. During the benchmark, a new method to standardize natural mortality estimates has been introduced which would hopefully circumvent re-scaling in the future?). 
+
+Last year, the combination of low recruitment, fishing harder than recommended and a lower Fmsy, lead to a substantially lower advice for 2019 (291 000 tonnes). This year, the assessments estimates - overall - a somewhat higher stock size compared to the estimate in 2018. This is due to the 2018 herring acoustic survey, although the exact reason is not well understood. The advice for 2020 is higher than the advice that was given for 2019, despite that recruitment remains low and that the overall stock biomass is declining. The reason the advice is higher is because the catch forecast takes into account al the ages and weights of fish the make up the fishery. This is called the selectivity pattern. The fishery is heavily dependent on the abundance of the last strong year class (2013), which will be 7 year olds next year.  The TAC advice uses only F on ages 2-6 years old, and this, together with the abundance and higher weight of 7 year olds is what is leading to a higher TAC for 2020. 
+
+[her.27.3a47d.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.3a47d.pdf)
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-
-```
-
-Two weak year classes of North Sea herring are causing a decline in stock size and short-term prospects. The TAC and catches in 2018 have been substantially higher than the recommendations from ICES (600 000 instead of 518 000t).  Due to the benchmark assessment of North Sea herring, the reference points for fishing mortality have been revised downwards. The combination of low recruitment, fishing harder than recommended and a lower Fmsy, lead to a substantially lower advice for 2019 (291 000 tonnes).
-
-The assessment of North Sea herring was benchmarked in February 2018. There have been some revisions in the model and in the data that is being used for North Sea herring. Most important it the way of handling natural mortality estimates. This is one of the few assessments where natural mortality is derived from the multispecies model of the North Sea. This multispecies model is rerun every three years leading  to new estimates of natural mortality for the whole time-series. Because of changes in the multispecies model and in the underlying data for predator species (e.g. hake, cod, saithe), the natural mortality estimates of herring have been revised upwards and downwards several times. This then also leads to rescaling of the estimates of stock size and fishing mortality. During the benchmark, a new method to standardize natural mortality estimates has been introduced which would hopefully circumvent re-scaling in the future?). However, this year there has been a revision of reference points again, leading to a lower Fmsy (0.26) compared to the previous estimate (0.33). Weak 2014 year class leads to substantially lower advice, which was already foreseen in 2017. 
-
-[her.27.3a47d.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.3a47d.pdf)
-
 
 ## Atlanto-scandian herring
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-s   <- "her-noss"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
-
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
-
-```
-
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
+# s   <- "her-noss"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# A new long-term management strategy for Atlanto-scandian herring has been evaluated and agreed. Fmsy and the fishing mortality target are now higher than the previous values being used. The advice for 2019 is based on following the new management plan, with a TAC of around 590 000 tonnes (compared to an advice of 384 000 tonnes that was advised for 2018). 
+# 
+# The stock assessment is consistent with last year's assessment. The stock appears to be slowly declining. Fishing mortality has risen sharply in the last year (due to the erroneous advice in 2016). There are signs of a reasonable sized incoming year class. The reason that the advice is substantially higher than last year is due to the new management plan that has a higher target fishing mortality. Last year, the advice was based on a target fishing mortality of 0.086, this year it is based on 0.14. 
+# 
+# [her.27.1-24a514a.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.1-24a514a.pdf)
 
 ```
 
-A new long-term management strategy for Atlanto-scandian herring has been evaluated and agreed. Fmsy and the fishing mortality target are now higher than the previous values being used. The advice for 2019 is based on following the new management plan, with a TAC of around 590 000 tonnes (compared to an advice of 384 000 tonnes that was advised for 2018). 
-
-The stock assessment is consistent with last year's assessment. The stock appears to be slowly declining. Fishing mortality has risen sharply in the last year (due to the erroneous advice in 2016). There are signs of a reasonable sized incoming year class. The reason that the advice is substantially higher than last year is due to the new management plan that has a higher target fishing mortality. Last year, the advice was based on a target fishing mortality of 0.086, this year it is based on 0.14. 
-
-[her.27.1-24a514a.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.1-24a514a.pdf)
 
 ## Northeast Atlantic Mackerel
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 
 s   <- "mac-nea"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE, 
+             plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
+# [mac.27.nea.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/mac.27.nea.pdf)
+
 ```
+
+The ICES advice on Northeast Atlantic mackerel that was released in October 2018 has been received with a lot of scepticism and unbelief. According to that advice, the stock had been declining since 2011 and was estimated to be just below the MSY Btrigger. At the time, it was already found that the model results were very sensitive to the inclusion of the RFID tags. Leaving out only the RFID tags, gave a much higher stock estimate. 
+
+To deal with this assessment problem, an inter-benchmark has been set up which is lead to a new assessment configuration in March 2019 and an updated advice for 2019 in May 2019. The new assessment configuration uses a more limited tagging dataset (restricted in ages, years and years out at sea) and a different way of estimating recruitment in the model. This lead to a substantially higher stock estimate and a substantial revision of the advice for 2019.  
+
+[mac.27.nea.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/special_requests/no.2019.09.pdf)
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-
-```
-
-During the WGWIDE a press release came out on the Nordic swept-area survey that had shown that the biomass was 40% lower than the previous year. This survey result has an important effect on the stock assessment, as all the available indices now point to a lower stock size. This provides a much lower overall stock size compared to last year. Below is a comparison of the stock estimates of the current assessment (red line and uncertainty bands) in comparison the estimates of previous years.
-
-A major finding has been how sensitive the model results are to the inclusion of the RFID tags. Leaving out only the RFID tags, gives the perception of a much higher stock (see below). The RFID tags only  cover the most recent period. Compared to the old steel tags they exhibit a very strange phenomenon that the tag survival appears to be very low (~10%) compared to around 40% for the steel tags. Could it be that there is something wrong with the RFID tags or scanners in that they are missing fish? The problem is that the RFID tagging data are currently not assembled in a working group and are therefore not well evaluated. A proposal has been made to set up such a group. 
-
-To deal with this problem of RFID tagging, an inter-benchmark has been set up which is leading up to a final meeting in the beginning of March 2019. 
-
-[mac.27.nea.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/mac.27.nea.pdf)
-
 
 ## Western horse mackerel
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-s   <- "hom-west"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
-
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# s   <- "hom-west"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# The stock assessment of Western horse mackerel is comparable to last year but there has been another revision upwards of the stock.  This is especially relevant in conjunction with the biomass reference points that have been set after the benchmark in 2017 and where the biomass in 2015 (the last year in the time series) was selected as Blim. Because of the upward revisions in the assessments of last year and this year, the stock is now well above the absolute Blim and in fact close to MSY Btrigger even though the stock is at the lowest point in the time-series! Fishing mortality is estimated to be well below the Fmsy. The advice for 2019 is 145 000 tonnes, which is 24% higher than the advice for 2018. The increase in the advice is because the stock size has been revised upwards and because the recent catches have been taken with a fishing mortality which was lower than Fmsy. The advice is based on the application of Fmsy.   
+# 
+# The assessment of western horse mackerel is very uncertain and there has been frequent re-scaling of the assessment during every new assessment. This re-scaling is still happening. For western horse mackerel this results in the overall stock to be estimated higher than the year before. That is why the stock is now estimated to be close to MSY Btrigger while the stock is at the same time around the lowest point in the time series. The resulting advice is a direct application of the ICES advice rule to an assessment that could very well be too optimistic.
+#  
+# [hom.27.2a4a5b6a7a-ce-k8.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hom.27.2a4a5b6a7a-ce-k8.pdf)
 
 ```
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-
-```
-
-The stock assessment of Western horse mackerel is comparable to last year but there has been another revision upwards of the stock.  This is especially relevant in conjunction with the biomass reference points that have been set after the benchmark in 2017 and where the biomass in 2015 (the last year in the time series) was selected as Blim. Because of the upward revisions in the assessments of last year and this year, the stock is now well above the absolute Blim and in fact close to MSY Btrigger even though the stock is at the lowest point in the time-series! Fishing mortality is estimated to be well below the Fmsy. The advice for 2019 is 145 000 tonnes, which is 24% higher than the advice for 2018. The increase in the advice is because the stock size has been revised upwards and because the recent catches have been taken with a fishing mortality which was lower than Fmsy. The advice is based on the application of Fmsy.   
-
-The assessment of western horse mackerel is very uncertain and there has been frequent re-scaling of the assessment during every new assessment. This re-scaling is still happening. For western horse mackerel this results in the overall stock to be estimated higher than the year before. That is why the stock is now estimated to be close to MSY Btrigger while the stock is at the same time around the lowest point in the time series. The resulting advice is a direct application of the ICES advice rule to an assessment that could very well be too optimistic.
- 
-[hom.27.2a4a5b6a7a-ce-k8.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/hom.27.2a4a5b6a7a-ce-k8.pdf)
 
 ## Blue whiting
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-s   <- "whb-comb"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
-
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
-
-```
-
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
+# s   <- "whb-comb"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# The stock size of blue whiting was high in 2018 but is predicted to be substantially lower in 2019 due to low recruitments coming in. The stock size of blue whiting appears to have been overestimated. Catches have been well above 1 Million tonnes over the last few years and above the scientific advice. Fishing mortality is estimated to be above Fmsy. The advice for 2019 is 1 144 000 tonnes, which is 18% lower than the advice for 2018.  
+# 
+# The blue whiting survey went well in 2018 and showed the highest biomass of the time series. Despite the high catches, the stock is still at a very high level although a decline does appear to have started. The most recent year classes of blue whiting are very weak so that decline in catching opportunities in the further years is foreseen. 
+# 
+# [whb.27.1-91214.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/whb.27.1-91214.pdf)
 
 ```
 
-The stock size of blue whiting was high in 2018 but is predicted to be substantially lower in 2019 due to low recruitments coming in. The stock size of blue whiting appears to have been overestimated. Catches have been well above 1 Million tonnes over the last few years and above the scientific advice. Fishing mortality is estimated to be above Fmsy. The advice for 2019 is 1 144 000 tonnes, which is 18% lower than the advice for 2018.  
-
-The blue whiting survey went well in 2018 and showed the highest biomass of the time series. Despite the high catches, the stock is still at a very high level although a decline does appear to have started. The most recent year classes of blue whiting are very weak so that decline in catching opportunities in the further years is foreseen. 
-
-
-[whb.27.1-91214.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/whb.27.1-91214.pdf)
 
 
 ## Western Baltic Spring Spawning herring
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 s   <- "her-3a22"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
 ```
 
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
+Assessment was benchmarked in 2018 when reference points were also re-estimated. Redefinition of Blim from 90 kT to 120 kT which lead to stock having been below Blim for a number of years already. No possibility of rebuilding stock to Blim within one year (which is the unwritten new ICES rule), and therefore a zero catch advice. 
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
+The new assessment has estimated the stock to be lower compared to the assessment of last year. This lead to a repeat of the zeor advice. 
 
-Assessment benchmarked in 2018. Revision of reference points. Redefinition of Blim from 90 kT to 120 kT which leads to stock having been below Blim for a number of years already. No possibility of rebuilding stock to Blim within one year (which is the unwritten new ICES rule), and therefore a zero catch advice. An additional analysis will be undertaken (by MP) to evaluate alternative options for the zero catch advice. 
-
-[her.27.20-24.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.20-24.pdf)
-
+[her.27.20-24.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.20-24.pdf)
 
 
 ## Baltic Sea herring
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
 s   <- "her-2532-gor"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               
+             plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
 ```
+
+Assessment largely consistent with last year's assessment. The 2014 year class is estimated to be strong.  
+
+[her.27.25-2932.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.25-2932.pdf)
+
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-Substantially lower estimate of SSB and higher estimate of fishing mortality in the most recent assessment is probably due to the variability in the survey index. The 2014 year class is estimated to be strong.  
-
-[her.27.25-2932.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.25-2932.pdf)
-
 
 ## Herring in 6a and 7bc
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "her-67bc"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "her-67bc"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+# 
+# The advice for a zero TAC is the same as in the previous years. Unfortunately ICES has not presented advice on the proposed rebuilding plan that has been developed by the PELAC and that has been submitted for review to ICES and that had been evaluated by the herring working group in March 2018. In previous years the monitoring TAC for herring in 6a and 7bc had been suggested by ICES as a means to maintain the knowledge base for this herring stock. The monitoring TAC is still mentioned under issues relevant for the advice. 
+# 
+# [her.27.6a7bc.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.6a7bc.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
+
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-The advice for a zero TAC is the same as in the previous years. Unfortunately ICES has not presented advice on the proposed rebuilding plan that has been developed by the PELAC and that has been submitted for review to ICES and that had been evaluated by the herring working group in March 2018. In previous years the monitoring TAC for herring in 6a and 7bc had been suggested by ICES as a means to maintain the knowledge base for this herring stock. The monitoring TAC is still mentioned under issues relevant for the advice. 
-
-[her.27.6a7bc.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.6a7bc.pdf)
-
 
 ## Herring in the Irish Sea
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "her-nirs"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "her-nirs"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock was benchmarked in 2017. SSB is well above MSY Btrigger and fishing mortality well below Fmsy. Potential mixing of herring in the Irish Sea and the Celtic Sea. 
+# 
+# [her.27.nirs.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.nirs.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
+
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-Stock was benchmarked in 2017. SSB is well above MSY Btrigger and fishing mortality well below Fmsy. Potential mixing of herring in the Irish Sea and the Celtic Sea. 
-
-[her.27.nirs.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.nirs.pdf)
-
-
 
 ## Herring in the Celtic Sea
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "her-irls"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "her-irls"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock went through interbenchmark in 2018 however perception of the stock trends is very similar to last year. Evaluations conducted in 2018 showed that the agreed management strategy is no longer precautionary. Therefore the advice is according to the MSY approach. 
+# 
+# [her.27.irls.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.irls.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
-
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-Stock went through interbenchmark in 2018 however perception of the stock trends is very similar to last year. Evaluations conducted in 2018 showed that the agreed management strategy is no longer precautionary. Therefore the advice is according to the MSY approach. 
-
-[her.27.irls.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/her.27.irls.pdf)
-
 
 
 ## Sprat in the North Sea
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "spr-nsea"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- c("spr-nsea", "spr.27.3a4")
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
 ```
 
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
+Assessment was benchmarked in 2019, leading to a combination of sprat in 4 and sprat in 3a into a single stock. Some changes to the model al well, leading to a different perception of the history of the stock and lower stocksize in recent years. 
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-
-The change in recruitment level between this year’s assessment and the previous years is caused by a recent update of natural mortality of sprat in the first six months of their life. The 2018 assessment also revised the 2017 SSB downwards. The assessment has a tendency to overestimate above-average recruitments.
-
-[spr.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/spr.27.4.pdf)
+[spr.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/spr.27.4.pdf)
 
 
 
 ## Sprat in the Baltic Sea
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
 s   <- "spr-2232"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
 ```
-
-
-
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
 
 Advice according to the Baltic Multiannual Plan (MAP). 
 
-[spr.27.22-32.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/spr.27.22-32.pdf)
+[spr.27.22-32.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/spr.27.22-32.pdf)
 
 
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 
 ## Greater argentine in 5b and 6a
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "arg-5b6a"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "arg-5b6a"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Latest advice was from 2017, applicable for two years. Next advice foreseen in 2019. 
+# 
+# [aru.27.5b6a.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2017/2017/aru.27.5b6a.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
 
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-
-Latest advice was from 2017, applicable for two years. Next advice foreseen in 2019. 
-
-[aru.27.5b6a.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2017/2017/aru.27.5b6a.pdf)
-
-
-
 
 ## Northern Hake
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "hke-nrtn"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "hke-nrtn"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock size is well above MSY Btrigger and fishing mortality is below Fmsy. In the past, there has been a tendency to underestimate SSB and overestimate F but this is not the case in the most recent years. 
+# 
+# [hke.27.3a46-8abd.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hke.27.3a46-8abd.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
-
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-
-Stock size is well above MSY Btrigger and fishing mortality is below Fmsy. In the past, there has been a tendency to underestimate SSB and overestimate F but this is not the case in the most recent years. 
-
-[hke.27.3a46-8abd.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/hke.27.3a46-8abd.pdf)
-
-
 
 ## North Sea cod
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "cod-347d"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "cod-347d"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# The 2018 assessment gave substantially lower estimates of SSB and higher estimates of fishing mortality in recent years. According to the advice document, this is (partially) caused by a lower than expected survey index for the strong 2013 and 2016 year classes in IBTS quarter 1 survey and the IBTS quarter 3 survey. The 2017 SSB is 32% lower compared to the estimate that was presented last year. This also leads to a substantially lower advice for 2019 compared to the advice for 2018. 
+# 
+# [cod.27.47d20.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/cod.27.47d20.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
-
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-
-The 2018 assessment gave substantially lower estimates of SSB and higher estimates of fishing mortality in recent years. According to the advice document, this is (partially) caused by a lower than expected survey index for the strong 2013 and 2016 year classes in IBTS quarter 1 survey and the IBTS quarter 3 survey. The 2017 SSB is 32% lower compared to the estimate that was presented last year. This also leads to a substantially lower advice for 2019 compared to the advice for 2018. 
-
-[cod.27.47d20.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/cod.27.47d20.pdf)
-
-
 
 ## North Sea plaice
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "ple-nsea"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "ple-nsea"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock size is well above MSY Btrigger (and close to 1 million tonnes) and fishing mortality is around Fmsy. An EU multiannual management plan (MAP) has been proposed for this stock (EU, 2016). This plan is not adopted by Norway, thus, not used as the basis of the advice for this shared stock. The advice is based on the MSY approach. 
+# 
+# [ple.27.420.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/ple.27.420.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
-
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-
-Stock size is well above MSY Btrigger (and close to 1 million tonnes) and fishing mortality is around Fmsy. An EU multiannual management plan (MAP) has been proposed for this stock (EU, 2016). This plan is not adopted by Norway, thus, not used as the basis of the advice for this shared stock. The advice is based on the MSY approach. 
-
-[ple.27.420.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/ple.27.420.pdf)
-
-
 
 ## North Sea sole
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "sol-nsea"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "sol-nsea"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock size above MSY Btrigger, fishing mortality around Fmsy. Advice according to the EU multiannual plan (MAP) for the North Sea. 
+# 
+# [sol.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/sol.27.4.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
+
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-
-
-Stock size above MSY Btrigger, fishing mortality around Fmsy. Advice according to the EU multiannual plan (MAP) for the North Sea. 
-
-[sol.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/sol.27.4.pdf)
-
-
 
 ## Atlantic Seabass
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-s   <- "bss-47"
-fay <- 2014; lay <- 2018
-fy  <- 2000; ly  <- 2018
+# s   <- "bss-47"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# ICES has reissued the advice for 2018 and issued an advice for 2019. ICES was requested by the EU to provide updated advice on fishing opportunities for 2018 because a benchmark of the assessment had been conducted in early 2018. The 2018 benchmark has not changed the perception of the current SSB (B below Blim). However, given the current low fishing mortality and the above-average recruitment in 2013 and 2014, SSB in 2019 and 2020 is predicted to be above Blim, allowing for some catches in 2018 and 2019. 
+# 
+# [bss.27.4bc7ad-h.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/bss.27.4bc7ad-h.pdf)
 
-cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 ```
-
-```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
-plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly) 
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1)
-```
-
-ICES has reissued the advice for 2018 and issued an advice for 2019. ICES was requested by the EU to provide updated advice on fishing opportunities for 2018 because a benchmark of the assessment had been conducted in early 2018. The 2018 benchmark has not changed the perception of the current SSB (B below Blim). However, given the current low fishing mortality and the above-average recruitment in 2013 and 2014, SSB in 2019 and 2020 is predicted to be above Blim, allowing for some catches in 2018 and 2019. 
-
-[bss.27.4bc7ad-h.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2018/2018/bss.27.4bc7ad-h.pdf)
 
 
 # More information

@@ -33,7 +33,8 @@ compare <-
   iAdvice %>% 
   dplyr::select(year=tacyear, stockkeylabelold, advisedlandingsmax, tal, landings, catches) %>% 
   rename(advice=advisedlandingsmax, tac = tal) %>% 
-  filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
+  filter(stockkeylabelold %in% c("her-47d3")) %>% 
+  # filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
   # filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
   filter(year >= 2000) %>% 
   gather(key=variable, value=value, advice:catches)
@@ -41,7 +42,11 @@ compare <-
 # plot of comparison of advice, tac, landings and catch
 compare %>% 
   ungroup() %>% 
-  mutate(variable = factor(variable, levels=c("advice", "tac", "landings", "catches"))) %>% 
+  
+  filter(variable %in% c("advice", "catches")) %>% 
+  filter(!is.na(value)) %>% 
+  mutate(variable = factor(variable, levels=c("advice","catches"))) %>% 
+  # mutate(variable = factor(variable, levels=c("advice", "tac", "landings", "catches"))) %>% 
   
   ggplot(aes(x=year, y=value, group=variable)) +
   theme_publication() +
@@ -57,6 +62,24 @@ compare %>%
   spread(key=variable, value=value) %>% 
   mutate(deviance = as.integer(100*(tac/advice-1)) ) %>% 
   filter(!is.na(deviance)) %>% 
+
+  ggplot(aes(x=year, y=deviance)) +
+  theme_publication() +
+  geom_hline(aes(yintercept=0), colour="black") +
+  geom_line(colour="blue", size=1.5) +
+  facet_wrap(~stockkeylabelold) 
+
+# plot of difference between catch and advice
+compare %>% 
+  filter(variable %in% c("advice","catches")) %>% 
+  filter(!is.na(value)) %>% 
+  
+  spread(key=variable, value=value) %>% 
+  mutate(deviance = as.integer(100*(catches/advice-1)) ) %>% 
+  filter(!is.na(deviance)) %>%
+  
+  ungroup() %>% 
+  mutate(meandev = mean(deviance)) %>% 
 
   ggplot(aes(x=year, y=deviance)) +
   theme_publication() +

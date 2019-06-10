@@ -457,3 +457,34 @@ save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 
 # unique(iAssess$purpose)
 # filter(iAssess, purpose=="historical") %>% View()
+
+# create overviews
+t1 <-
+  sag_unique %>% 
+  ungroup() %>% 
+  mutate(purpose = toupper(substr(purpose,1,1))) %>% 
+  group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
+  arrange(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear, purpose) %>% 
+  summarize(purpose= paste(purpose, collapse="")) 
+
+t2 <-
+  qcsexcel_unique %>% 
+  ungroup() %>% 
+  mutate(purpose = ifelse(grepl("bench",purpose), "bench", purpose)) %>% 
+  mutate(purpose = ifelse(grepl("exploratory|trendsonly",purpose), "unofficial", purpose)) %>% 
+  mutate(purpose = tolower(substr(purpose,1,1))) %>% 
+  group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
+  arrange(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear, purpose) %>% 
+  summarize(purpose= paste(purpose, collapse="")) 
+
+bind_rows(t1,t2) %>% 
+  filter(!is.na(stockkey)) %>% 
+  group_by(stockkeylabelold, stockkeylabelnew, stockkey, assessmentyear) %>% 
+  arrange(stockkeylabelold, stockkeylabelnew, stockkey, assessmentyear, purpose) %>% 
+  summarize(purpose= paste(purpose, collapse="")) %>% 
+  spread(key=assessmentyear, value=purpose) %>% 
+  write.csv(., file="iDatabases overview.csv", row.names=FALSE)
+
+
+
+  
