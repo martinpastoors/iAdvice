@@ -2,9 +2,6 @@
 output: 
   word_document:
     reference_docx: ../report_template_v1.5.dotx
-bibliography: paper_02_scalejumps.bib
-csl: ices-journal-of-marine-science.csl
-link-citations: yes
 ---
 
 
@@ -421,40 +418,20 @@ res <- pairwise_comparisons(removelastyears = c(0,1), numberofyears=c(2, 5,10), 
 
 tab_nums(name    = "section1", level = 1, display = FALSE)
 
-fig_nums(name    = "stockdefinitions", level = 1, display = FALSE,
-         caption = "Definitions of stocks (by year) that have been ‘lumped’ into meta-stocks for long time-series")
 
 fig_nums(name    = "differentmethods", level = 2, display = FALSE, 
          caption = "Comparison of three different types of retrospective metrics. t refers to the year for a stock metric X, i refers to the assessment year. Diagram A is applicable to Mohn’s rho and Jonsson and Hjorleifsson’s retrospective metrics while Ap refers to the same metrics calculated in peels (in this example of 4 years), B refers to Ralston’s et al metrics and Bp to the same metrics in peels and C refers to the scale differences calculated in this example over 4 years (this paper)")
 
-fig_nums(name    = "retroplots", level = 2, display = FALSE, 
-         caption = "Historic retrospective analysis of the nine stocks analysed. For each stock, the most recent assessment is in red and the previous assessments in black. The end point of each assessment is indicated by a dot. Stock definitions may have changed over time, but this is not included in the graphs")
 
 # section2 -----------------------------------------------------
 
 tab_nums(name    = "section2", level = 1, display = FALSE)
 
-fig_nums(name    = "retrometrics", level = 1, display = FALSE, 
-         caption = " Retrospective metrics for 9 species derived from historical assessment records. Metrics ab (average bias) and asd (average variation) from Jonsson & Hjorleifsson 2000, rho from Mohn 1999 and sigma from Ralston et al 2011. In red: calculated values based on the whole time-series of historical data. In blue: based on retrospective peels of 5 years. Metrics ab, asd and sigma on a log scale, rho on a ratio scale.")
-
-fig_nums(name    = "retrometrics2", level = 2, display = FALSE, 
-         caption = "Summary of retrospective metrics for 9 species derived from historical assessment records. Metrics ab (average bias) and asd (average variation) from Jonsson & Hjorleifsson 2000, rho from Mohn 1999 and sigma from Ralston et al 2011. In red: calculated values based on the whole time-series of historical data. In blue: based on retrospective peels of 5 years. Metrics ab, asd and sigma on a log scale, rho on a ratio scale.")
-
 # section 3 -----------------------------------------------------
 
-tab_nums(name    = "scalejumps", level = 1, display = FALSE, 
-         caption = "Percentage assessments with scale jumps of more than 10% expressed by decade. Between brackets: number of assessments within the decade.")
 
-fig_nums(name    = "scalecomparisons", level = 1, display = FALSE, 
-         caption = "Example of pairwise assessment comparisons for Northeast Atlantic mackerel  over a period of 10 years in common. The dotted lines indicate the average values of the different assessments which are used to calculate scale differences between assessments.")
 
-fig_nums(name    = "scalejumps", level = 2, display = FALSE, 
-         caption = "Retrospective scale difference (sigma) for 9 species derived from historical assessment records. Results from pairwise comparisons over periods of 10 years. Large dots  refer to years when the scale difference is larger than 10%. Colours indicate the decades. Black triangles indicate benchmark assessment years. The bottom part of the panels shows the assessment methods being deployed, the upper part of the panels the stock definitions.")
 
-fig_nums(name    = "metricsinpeels", level = 2, display = FALSE, 
-         caption = "Comparison of retrospective uncertainty metrics from historical assessment records, calculated in peels, normalized between 0 and 1. Asd from Jonsson & Hjorleifsson 2000, rhoabs as absolute value of rho from Mohn 1999, sigma from Ralston et al 2011, percjumps as the percentage of jumps (this paper) and phiabs as the absolute value of phi (this paper).")
-
-# section 4 -----------------------------------------------------
 
 fig_nums(name    = "stockdefchange", level = 1, display = FALSE, 
          caption = "Comparisons of assessments (SSB) where stock definitions changed. Green is old stock definition, red is new stock definition")
@@ -477,26 +454,6 @@ myBlues                 <- getPaletteBlues(10)
 
 <!-- Tables ------------------------------------------------------ -->
 
-**Tables**
-
-*`r tab_nums("scalejumps")`*
-
-```{r}
-
-# print table
-d.jumps.bydecade %>% 
-  filter(variable == "stocksize") %>% 
-  ungroup() %>% 
-  select(stock, decade, ratio3) %>% 
-  spread(key=decade, value=ratio3) %>% 
-  pandoc.table(.,
-               style = "simple",
-               split.tables=400, 
-               justify = "left",
-               missing=".",
-               round=c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)) 
-
-```
 
 <!-- Figures ------------------------------------------------------ -->
 
@@ -509,6 +466,9 @@ d.jumps.bydecade %>%
 <!-- ################################################################################## -->
 
 ```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "stockdefinitions", level = 1, display = FALSE,
+         caption = "Definitions of stocks (by year) that have been ‘lumped’ into meta-stocks for long time-series")
 
 d %>% 
   select(assessmentyear, stock, stockkeylabelold) %>% 
@@ -530,26 +490,12 @@ d %>%
 
 #####page break
 
-
-
-<!-- ################################################################################## -->
-<!-- Plot different methods of creating historical retrospectives --------------------- -->
-<!-- ################################################################################## -->
-
-```{r echo=FALSE, fig.align="center", fig.asp=0.7, message=FALSE, warning=FALSE}
-
-knitr::include_graphics("fig1.2_retromethods.jpg")
-  
-```
-
-*`r fig_nums("differentmethods")`*
-
-
-#####Page break
-
 <!-- Plot Retroplots --------------------------- -->
 
 ```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "retroplots", level = 2, display = FALSE, 
+         caption = "Historic retrospective analysis of the nine stocks analysed. For each stock, the most recent assessment is in red and the previous assessments in black. The end point of each assessment is indicated by a dot. Stock definitions may have changed over time, but this is not included in the graphs")
 
 myvar <- "stocksize"
 
@@ -589,54 +535,80 @@ d.selection %>%
 
 #####Page break
 
-
-
-
-
-#####Page break
-
 <!-- ################################################################################## -->
 <!-- Plot pairwise comparisons                                                          -->
 <!-- ################################################################################## -->
 
-```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+fig_nums(name    = "pairwisecomparisons", level = 1, display = FALSE, 
+         caption = "Pairwise assessment comparisons for the five most recent assessment pairs over a period of 5  years in common. The dotted lines indicate the average values of the different assessments which are used to calculate scale differences between assessments.")
 
 myvar         <- "stocksize"
-myspecies     <- "her"
-firstyear     <- 2008
+# myvar         <- "fishingpressure"
+myspecies     <- c("cod", "mac", "hom", "had", "her","hke","ple","sol","whb")
+firstyear     <- 2013
 firstplotyear <- 2000
+lastplotyear  <- 2020
 mynyears      <- 5
 myremoveyears <- 0
-mythreshold   <- 0.1
-mytitle       <- paste0(toupper(myspecies), ", ", myvar, ", number of years: ",mynyears, 
+mythreshold   <- 0.2
+mytitle       <- paste0(myvar, ", number of years: ",mynyears, 
                         ", removed years: ", myremoveyears)
 
+# selection of pairwise means
 d.pairwise.means <-
   
   res$d.pairwise %>% 
   # ungroup() %>% 
   # distinct(removelastyears, numberofyears, threshold) %>% 
   # View()
-
+  mutate(species = substr(stockkeylabelold,1,3)) %>% 
+  
   filter(removelastyears==myremoveyears, numberofyears==mynyears) %>% 
   filter(variable == myvar) %>% 
-  filter(grepl(myspecies, stockkeylabelold)) %>% 
+  filter(species %in% myspecies) %>% 
   filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
   
   # calculate means per period
-  group_by(stock, assessmentpair, variable) %>% 
+  group_by(stock, species, assessmentpair, variable) %>% 
   mutate(   firstyear      = min(year),
             lastyear       = max(year)) %>% 
-  group_by(stock, assessmentpair, variable, assessmentyear, label, firstyear, lastyear) %>% 
+  group_by(stock, species, assessmentpair, variable, assessmentyear, label, firstyear, lastyear) %>% 
   summarise(value = mean(value, na.rm=TRUE)) %>% 
   gather(key=tmp, value=year, firstyear:lastyear) %>% 
-  arrange(stock, assessmentpair, variable, assessmentyear, label) 
+  arrange(stock, species, assessmentpair, variable, assessmentyear, label) 
 
+# selection of pairwise long timeseries
+d.pairwise.roughly <-
+  
+  res$d.pairwise.roughly %>% 
+  mutate(species = substr(stockkeylabelold,1,3)) %>% 
+  filter(removelastyears==myremoveyears, numberofyears==mynyears) %>% 
+  filter(variable == myvar) %>% 
+  filter(species %in% myspecies) %>% 
+  filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) 
+
+# selection of pairwise phi texts
+d.pcm <-
+  res$d.pcm %>% 
+  mutate(species = substr(stock,1,3)) %>% 
+  filter(variable == myvar) %>% 
+  filter(species %in% myspecies) %>% 
+  filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
+  filter(numberofyears == mynyears) %>% 
+  filter(removelastyears == myremoveyears) %>% 
+  filter(threshold == mythreshold)
+  
+# start plot
 res$d.pairwise %>% 
+  
+  mutate(species = substr(stockkeylabelold,1,3)) %>% 
   
   filter(removelastyears==myremoveyears, numberofyears==mynyears) %>% 
   filter(variable == myvar) %>% 
-  filter(grepl(myspecies, stockkeylabelold)) %>% 
+  filter(species %in% myspecies) %>% 
   filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
   
   ggplot(aes(x=year, y=value, group=assessmentyear)) +
@@ -647,40 +619,35 @@ res$d.pairwise %>%
     strip.background = element_blank(),
     strip.text.x     = element_text(face="bold", hjust=0, margin = margin(1,0,0,0, "mm")),
     strip.text.y     = element_text(angle = 0),
-   # axis.text.x      = element_text(angle = 90, vjust = 0.5), 
+    axis.text.x      = element_text(angle = 90, vjust = 0.5), 
     legend.position  = "none"
   ) +  
   
-  geom_line(data=filter(res$d.pairwise.roughly, 
-                        variable == myvar, 
-                        grepl(myspecies, stockkeylabelold),
-                        as.numeric(substr(assessmentpair,1,4)) >= firstyear,
-                        year >= firstplotyear), 
-            size=0.5) +
+  # long black lines
+  geom_line(data=d.pairwise.roughly,size=0.5) +
   
+  # short, thick, coloured comparison lines
   geom_line(aes(colour=factor(label)), size=1) +
 
+  # coloured means segments with start and end points
   geom_line(data=d.pairwise.means, aes(x=year, y=value, colour=factor(label)),
             linetype="dashed", lineend="butt", inherit.aes = FALSE) +
   geom_point(data=filter(d.pairwise.means, year==min(year)),
              aes(colour=factor(label)), size=1) +
   geom_point(data=filter(d.pairwise.means, year==max(year)),
              aes(colour=factor(label)), size=1) +
-  geom_text (data=filter(res$d.pcm,
-                         variable == myvar,
-                         grepl(myspecies, stock),
-                         as.numeric(substr(assessmentpair,1,4)) >= firstyear,
-                         numberofyears == mynyears,
-                         removelastyears == myremoveyears,
-                         threshold == mythreshold),
-             aes(x=firstplotyear, y=0, label = paste0("phi=", round(phi_abs, digits=2))), 
-             hjust=0, vjust=0, nudge_x = -0.1, nudge_y=0.1,  inherit.aes = FALSE) +
   
+  # phi text
+  geom_text (data=d.pcm,
+             aes(label = paste0("phi=", round(phi_abs, digits=2))), 
+             x=firstplotyear, y=0, hjust=0, vjust=0,  inherit.aes = FALSE) +
+  
+  xlim(firstplotyear,lastplotyear) +
   scale_y_continuous(breaks = pretty_breaks(n=3), labels=scientific_format(digits=1)) +
-  scale_x_continuous(breaks = pretty_breaks(n=2)) +
+  # scale_x_continuous(breaks = pretty_breaks(n=2)) +
   expand_limits(y=0) +
   labs(x="", y=myvar, title=mytitle) +
-  facet_wrap( ~ assessmentpair, ncol=5)
+  facet_grid(species~assessmentpair, scales = "free_y")
 
 # names(res)
 # filter(res$d.pcm,
@@ -703,12 +670,15 @@ res$d.pairwise %>%
 
 ```{r echo=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
 
+fig_nums(name    = "scalejumps", level = 1, display = FALSE, 
+         caption = "Retrospective scale difference (phi) for 9 species derived from historical assessment records. Results from pairwise comparisons over periods of 5 years. Large dots  refer to years when the scale difference is larger than 20%. Colours indicate the decades. Black triangles indicate benchmark assessment years. The bottom part of the panels shows the assessment methods being deployed, the upper part of the panels the stock definitions.")
+
 # res <- pairwise_comparisons(removelastyears = 0, numberofyears=10, threshold = 0.10)
 
 # threshold <- 0.10
-mynyears      <- 10
+mynyears      <- 5
 myremoveyears <- 0
-mythreshold   <- 0.1
+mythreshold   <- 0.2
 myvar         <- "stocksize"
 mytitle       <- paste0(myvar, ", number of years: ",mynyears, ", threshold: ", 
                         comma_format(digits=1, suffix="%")(100*mythreshold))
@@ -795,12 +765,14 @@ t %>%
 
 ```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
 
+tab_nums(name    = "scalejumps2", level = 1, display = FALSE, 
+         caption = "Example (mackerel) of sensivity of scale-jumps to the number of years included and the threshold for defining a scale-jump between two assessments.")
 
 # plot scale jumps with different settings for number of years and thresholds
 
 myremoveyears <- 0
 myvar         <- "stocksize"
-myspecies     <- "cod"
+myspecies     <- "mac"
 mytitle       <- paste0(toupper(myspecies), ", ", myvar, ", removed years: ", myremoveyears)
 
 res$d.pcm %>% 
@@ -859,12 +831,129 @@ res$d.pcm %>%
 <!-- COmpare scale jumps when stock definition changed                                  -->
 <!-- ################################################################################## -->
 
-```{r metricsatstockchange, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+```{r echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
 
+# Compare scale jumps when stock definition has changed.
+
+mynyears      <- 5
+myremoveyears <- 0
+myvar         <- "stocksize"
+mytitle       <- paste0(toupper(myspecies), ", ", myvar, ", removed years: ", myremoveyears)
+
+# select combinations of stock and assessmentyear when stock definition has changed
+t <-
+  d %>% 
+  select(assessmentyear, stock, stockkeylabelold) %>% 
+  distinct() %>% 
+  mutate(
+    stock = factor(stock),
+    stock = factor(stock, levels=rev(levels(stock)))) %>% 
+  group_by(stock, stockkeylabelold) %>% 
+  summarize(
+    firstyear = min(assessmentyear),
+    lastyear  = max(assessmentyear)) %>% 
+  arrange(stock, firstyear) %>% 
+  group_by(stock) %>% 
+  mutate(
+    previous       = lag(lastyear),
+    assessmentpair = paste(previous, firstyear, sep="-"),
+    stockold       = lag(stockkeylabelold)) %>% 
+  filter(!is.na(previous))  %>% 
+  select(stock, assessmentpair) 
+
+# select the assessment information after the change
+t1 <-
+  t %>% 
+  left_join(d.pairs, by=c("stock", "assessmentpair")) %>% 
+  select(-assessmentyearprior) %>% 
+  left_join(d, by=c("stock", "variable", "assessmentyearlast" = "assessmentyear")) %>% 
+  mutate(label="last") %>% 
+  rename(assessmentyear = assessmentyearlast)
+
+# data series with previous (prior) estimation
+t2 <-
+  t %>% 
+  left_join(d.pairs, by=c("stock", "assessmentpair")) %>% 
+  select(-assessmentyearlast) %>% 
+  left_join(d, by=c("stock", "variable", "assessmentyearprior" = "assessmentyear")) %>% 
+  mutate(label="prior") %>% 
+  rename(assessmentyear = assessmentyearprior)
+
+# combine before and after the change
+t3 <-
+  bind_rows(t2, t1) %>% 
+  group_by(stock, assessmentpair, variable) %>% 
+  
+  # filter the appropriate period
+  filter(year <= max(assessmentyear) - myremoveyears,
+         year >= max(assessmentyear) - myremoveyears - mynyears) %>% 
+  
+  # sort
+  arrange(stock, assessmentpair, assessmentyear, year) %>% 
+
+  # filter only years that are in common in last and prior
+  group_by(stock, assessmentpair, variable, year) %>% 
+  mutate(
+    n = n(),
+    header = paste(stock, assessmentpair, sep=" ")
+  ) %>% 
+  filter(n() == 2) 
+
+# calculate pairwise means
+t3.pairwise.means <-
+  
+  t3 %>% 
+  group_by(header, stock, assessmentpair, variable) %>% 
+  distinct(header, stock, assessmentpair, variable) %>% 
+  left_join(res$d.pairwise, by=c("stock", "assessmentpair", "variable")) %>% 
+
+  filter(
+    removelastyears == myremoveyears,
+    numberofyears   == mynyears,
+    variable        == myvar) %>% 
+  
+  # calculate means per period
+  group_by(header, stock, assessmentpair, variable) %>% 
+  mutate(   firstyear      = min(year),
+            lastyear       = max(year)) %>% 
+  group_by(header, stock, assessmentpair, variable, label, firstyear, lastyear) %>% 
+  summarise(value = mean(value, na.rm=TRUE)) %>% 
+  gather(key=tmp, value=year, firstyear:lastyear) %>% 
+  arrange(header, stock, assessmentpair, variable, label) 
+
+# selection of pairwise long timeseries
+t3.pairwise.roughly <-
+  
+  t3 %>% 
+  group_by(header, stock, assessmentpair, variable) %>% 
+  distinct(header, stock, assessmentpair, variable) %>% 
+  left_join(res$d.pairwise.roughly, by=c("stock", "assessmentpair", "variable")) %>% 
+
+  filter(
+    removelastyears == myremoveyears,
+    numberofyears   == mynyears,
+    variable        == myvar) 
+
+# get phi for selected assessment pairs
+t3.pcm <-
+  
+  t3 %>% 
+  group_by(header, stock, assessmentpair, variable) %>% 
+  distinct(header, stock, assessmentpair, variable) %>% 
+  left_join(res$d.pcm, by=c("stock", "assessmentpair", "variable")) %>% 
+
+  filter(
+    removelastyears == myremoveyears,
+    numberofyears   == mynyears,
+    variable        == myvar) %>% 
+  ungroup() %>% 
+  distinct(header, stock, assessmentpair, variable, .keep_all = TRUE)
 
 # plot scale jumps between assessments when stock definition changed
 t3 %>% 
-
+  
+  filter(variable == myvar) %>% 
+  
   ggplot(aes(x=year, y=value, group=label)) +
   theme_publication() +
   theme(
@@ -877,11 +966,33 @@ t3 %>%
     legend.position  = "none"
   ) +
   
-  geom_line(aes(colour=label), size=0.5) +
   
-  geom_dl(aes(label  = stockkeylabelold, colour = label),
-          method = list(dl.combine("first.bumpup"), cex = 0.8, hjust=0)) +
+  # geom_dl(aes(label  = stockkeylabelold, colour = label),
+  #         method = list(dl.combine("first.bumpup"), cex = 0.8, hjust=0)) +
+  
+  # long black lines
+  geom_line(data=t3.pairwise.roughly,size=0.5) +
 
+  # This coloured line segments
+  geom_line(aes(colour=label), size=1.5) +
+  
+  # coloured means segments with start and end points
+  geom_line(data=t3.pairwise.means, aes(x=year, y=value, colour=label),
+            linetype="dashed", lineend="butt", inherit.aes = FALSE) +
+  geom_point(data=filter(t3.pairwise.means, year==min(year)),
+             aes(colour=label), size=1) +
+  geom_point(data=filter(t3.pairwise.means, year==max(year)),
+             aes(colour=label), size=1) +
+  
+  # phi text
+  geom_text (data=t3.pcm,
+             aes(label = paste0("phi=", round(phi_abs, digits=2)), x= min(t3.pairwise.roughly$year)), 
+             y=0, 
+             hjust=0, vjust=0,  inherit.aes = FALSE) +
+  
+  # annotate("text", label = "left", 
+  #           x =  min(t3.pairwise.roughly$year), y = 0, hjust = 0) +
+  
   scale_y_continuous(labels=scientific_format(digits=2)) +
   scale_x_continuous(breaks = pretty_breaks(n=3)) +
   expand_limits(y=0) +
@@ -889,6 +1000,9 @@ t3 %>%
   facet_wrap( ~ header, scales="free")
 
 
+# unique(d.pairwise.means$label)
+# unique(d.pairwise.roughly$label)
+# unique(t3$label)
 
 ```
 
@@ -925,7 +1039,7 @@ t3 %>%
 <!-- COmpare the number of scale jumps (as ratio) over time                             -->
 <!-- ################################################################################## -->
 
-```{r jumpratio, eval=FALSE, fig.align="center", fig.asp=0.5, message=FALSE, warning=FALSE, include=FALSE}
+```{r, eval=FALSE, fig.align="center", fig.asp=0.5, message=FALSE, warning=FALSE, include=FALSE}
 
 # NOT SHOWN, NOT USED
 
@@ -955,7 +1069,7 @@ d.jumps.byyear %>%
 *`r fig_nums("jumpratio")`*
 
 
-```{r jumpratio, eval=FALSE, fig.align="center", fig.asp=0.5, message=FALSE, warning=FALSE, include=FALSE}
+```{r, eval=FALSE, fig.align="center", fig.asp=0.5, message=FALSE, warning=FALSE, include=FALSE}
 
 # NOT SHOWN, NOT USED
 
@@ -1624,7 +1738,7 @@ d.pcm %>%
 <!-- COmpare all metrics in peels                                                       -->
 <!-- ################################################################################## -->
 
-```{r metricsinpeels, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE, include=FALSE}
 
 
 d.metrics_bystock2 %>% 
@@ -1673,4 +1787,97 @@ d.metrics_bystock2 %>%
 #   labs(y="", x="") +
 #   facet_wrap(~metric, scales="free_y")
 
+```
+
+```{r eval=FALSE, fig.align="center", fig.asp=0.7, message=FALSE, warning=FALSE, include=FALSE}
+
+myvar         <- "stocksize"
+myspecies     <- "mac"
+firstyear     <- 2008
+firstplotyear <- 2000
+mynyears      <- 5
+myremoveyears <- 0
+mythreshold   <- 0.1
+mytitle       <- paste0(toupper(myspecies), ", ", myvar, ", number of years: ",mynyears, 
+                        ", removed years: ", myremoveyears)
+
+d.pairwise.means <-
+  
+  res$d.pairwise %>% 
+  # ungroup() %>% 
+  # distinct(removelastyears, numberofyears, threshold) %>% 
+  # View()
+
+  filter(removelastyears==myremoveyears, numberofyears==mynyears) %>% 
+  filter(variable == myvar) %>% 
+  filter(grepl(myspecies, stockkeylabelold)) %>% 
+  filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
+  
+  # calculate means per period
+  group_by(stock, assessmentpair, variable) %>% 
+  mutate(   firstyear      = min(year),
+            lastyear       = max(year)) %>% 
+  group_by(stock, assessmentpair, variable, assessmentyear, label, firstyear, lastyear) %>% 
+  summarise(value = mean(value, na.rm=TRUE)) %>% 
+  gather(key=tmp, value=year, firstyear:lastyear) %>% 
+  arrange(stock, assessmentpair, variable, assessmentyear, label) 
+
+res$d.pairwise %>% 
+  
+  filter(removelastyears==myremoveyears, numberofyears==mynyears) %>% 
+  filter(variable == myvar) %>% 
+  filter(grepl(myspecies, stockkeylabelold)) %>% 
+  filter(as.numeric(substr(assessmentpair,1,4)) >= firstyear) %>% 
+  
+  ggplot(aes(x=year, y=value, group=assessmentyear)) +
+  theme_publication() +
+  theme(
+    panel.spacing.x = unit(1, "mm"),
+    panel.spacing.y = unit(1, "mm"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(1,0,0,0, "mm")),
+    strip.text.y     = element_text(angle = 0),
+   # axis.text.x      = element_text(angle = 90, vjust = 0.5), 
+    legend.position  = "none"
+  ) +  
+  
+  geom_line(data=filter(res$d.pairwise.roughly, 
+                        variable == myvar, 
+                        grepl(myspecies, stockkeylabelold),
+                        as.numeric(substr(assessmentpair,1,4)) >= firstyear,
+                        year >= firstplotyear), 
+            size=0.5) +
+  
+  geom_line(aes(colour=factor(label)), size=1) +
+
+  geom_line(data=d.pairwise.means, aes(x=year, y=value, colour=factor(label)),
+            linetype="dashed", lineend="butt", inherit.aes = FALSE) +
+  geom_point(data=filter(d.pairwise.means, year==min(year)),
+             aes(colour=factor(label)), size=1) +
+  geom_point(data=filter(d.pairwise.means, year==max(year)),
+             aes(colour=factor(label)), size=1) +
+  geom_text (data=filter(res$d.pcm,
+                         variable == myvar,
+                         grepl(myspecies, stock),
+                         as.numeric(substr(assessmentpair,1,4)) >= firstyear,
+                         numberofyears == mynyears,
+                         removelastyears == myremoveyears,
+                         threshold == mythreshold),
+             aes(x=firstplotyear, y=0, label = paste0("phi=", round(phi_abs, digits=2))), 
+             hjust=0, vjust=0, nudge_x = -0.1, nudge_y=0.1,  inherit.aes = FALSE) +
+  
+  scale_y_continuous(breaks = pretty_breaks(n=3), labels=scientific_format(digits=1)) +
+  scale_x_continuous(breaks = pretty_breaks(n=2)) +
+  expand_limits(y=0) +
+  labs(x="", y=myvar, title=mytitle) +
+  facet_wrap( ~ assessmentpair, ncol=5)
+
+# names(res)
+# filter(res$d.pcm,
+#                          variable = myvar,
+#                          grepl(myspecies, stock),
+#                          as.numeric(substr(assessmentpair,1,4)) >= firstyear,
+#                          numberofyears == mynyears,
+#                          removelastyears == myremoveyears,
+#                          threshold == mythreshold)
 ```
