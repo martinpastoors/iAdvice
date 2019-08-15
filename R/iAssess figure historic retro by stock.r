@@ -72,7 +72,7 @@ d <-
   filter(year             >=   1980) %>% 
   # filter(year             >  2000) %>%  
   # filter(year             <= assessmentyear) %>% 
-  filter(assessmentyear   >  2008) %>% 
+  filter(assessmentyear   >  2000) %>% 
   # filter(assessmentyear   >  2014) %>% 
   
   # filter(purpose %in% c("advice", "update")) %>% 
@@ -194,6 +194,7 @@ p1 <-
   facet_grid(stockkeylabelold ~ ., scales="free_y")
   # facet_grid(stockkeylabelold ~ purpose, scales="free_y")
 
+p1
 
 # plot f
 p2 <-

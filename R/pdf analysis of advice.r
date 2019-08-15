@@ -11,10 +11,10 @@ for (y in 1981:2018) {
   assign(paste("results",y,sep=""), {
     
     # print(y)
-    print(file.path("F:/ices/advice",y))
+    print(file.path("E:/ices/advice",y))
     
-    keyword_directory(file.path("F:/ices/advice",y),
-                      keyword = c('robust'),
+    keyword_directory(file.path("E:/ices/advice",y),
+                      keyword = c('rebuilding plan'),
                       file_pattern   = ".pdf",
                       ignore_case    = TRUE, recursive = TRUE, 
                       surround_lines = 1, full_names     = TRUE) %>% 

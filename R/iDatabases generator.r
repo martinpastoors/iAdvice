@@ -39,17 +39,7 @@
 # 23/03/2019 adapated after change to download data procedure
 # 06/05/2019 dplyr update. Changed "funs" to "list" in mutate_at functions 
 # 15/05/2019 removed double assessments from SAG
-
-# Warning messages:
-#   1: funs() is soft deprecated as of dplyr 0.8.0
-# please use list() instead
-# 
-# # Before:
-# funs(name = f(.)
-#      
-#      # After: 
-#      list(name = ~f(.))
-
+# 15/08/2019 removed doubles arising from iAdvice and SAG coupling on purpose
 # -----------------------------------------------------------------------------------------------
 
 # rm(list=ls())

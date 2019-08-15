@@ -64,13 +64,13 @@ d <-
     stock = as.character(NA),
     stock = ifelse(grepl("ple-n",stockkeylabelold), "ple (north sea)",stock),
     stock = ifelse(grepl("her-4",stockkeylabelold), "her (north sea)",stock),
-    stock = ifelse(grepl("mac-67|mac-nea|mac-west",stockkeylabelold), "mac (west)",stock),
+    stock = ifelse(grepl("mac-67|mac-nea|mac-west",stockkeylabelold), "mac (nea)",stock),
     stock = ifelse(grepl("cod-34|cod-nsea",stockkeylabelold), "cod (north sea)",stock),
-    stock = ifelse(grepl("whb-c|whb-n",stockkeylabelold), "whb (comb)",stock),
+    stock = ifelse(grepl("whb-c|whb-n",stockkeylabelold), "whb (nea)",stock),
     stock = ifelse(grepl("sol-ns",stockkeylabelold), "sol (north sea)",stock),
-    stock = ifelse(grepl("hom-c|hom-w",stockkeylabelold), "hom (west)",stock),
+    stock = ifelse(grepl("hom-c|hom-w",stockkeylabelold), "hom (nea)",stock),
     stock = ifelse(grepl("had-3|had-n",stockkeylabelold), "had (north sea)",stock),
-    stock = ifelse(grepl("hke-n",stockkeylabelold), "hke (north)",stock)
+    stock = ifelse(grepl("hke-n",stockkeylabelold), "hke (nea)",stock)
   ) %>% 
   
   # Exclude prediction years (but keep the benchmark information that has no year attached to it)
@@ -457,18 +457,11 @@ myBlues                 <- getPaletteBlues(10)
 
 <!-- Figures ------------------------------------------------------ -->
 
-#####page break
-
-**Figures**
-
 <!-- ################################################################################## -->
 <!-- Plot Stock definitions      ------------------------------------------------------ -->
 <!-- ################################################################################## -->
 
 ```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
-
-fig_nums(name    = "stockdefinitions", level = 1, display = FALSE,
-         caption = "Definitions of stocks (by year) that have been ‘lumped’ into meta-stocks for long time-series")
 
 d %>% 
   select(assessmentyear, stock, stockkeylabelold) %>% 
@@ -486,16 +479,13 @@ d %>%
 
 ```
 
-*`r fig_nums("stockdefinitions")`*
+*Figure 1: Definitions of stocks (by year) that have been ‘lumped’ into meta-stocks for long time-series*
 
 #####page break
 
 <!-- Plot Retroplots --------------------------- -->
 
 ```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
-
-fig_nums(name    = "retroplots", level = 2, display = FALSE, 
-         caption = "Historic retrospective analysis of the nine stocks analysed. For each stock, the most recent assessment is in red and the previous assessments in black. The end point of each assessment is indicated by a dot. Stock definitions may have changed over time, but this is not included in the graphs")
 
 myvar <- "stocksize"
 
@@ -531,7 +521,7 @@ d.selection %>%
 
 ```
 
-*`r fig_nums("retroplots")`*
+*Figure 2: Historic retrospective patterns in stock size (SSB) of the nine meta-stocks consid-ered. For each meta-stock, the most recent assessment is in red and the previous assess-ments in black. The end point of each assessment is indicated by a dot.*
 
 #####Page break
 
@@ -541,9 +531,6 @@ d.selection %>%
 
 
 ```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
-
-fig_nums(name    = "pairwisecomparisons", level = 1, display = FALSE, 
-         caption = "Pairwise assessment comparisons for the five most recent assessment pairs over a period of 5  years in common. The dotted lines indicate the average values of the different assessments which are used to calculate scale differences between assessments.")
 
 myvar         <- "stocksize"
 # myvar         <- "fishingpressure"
@@ -659,109 +646,10 @@ res$d.pairwise %>%
 #                          threshold == mythreshold)
 ```
 
-*`r fig_nums("scalecomparisons")`*
+*Figure 3: Pairwise Comparison of Means for the assessment pairs between 2013 and 2018 based on historic retrospective estimates of stock size (SSB) of the nine meta-stocks consid-ered. The coloured segments indicate the years for which the PCM is calculated (blue = first year, red = second year) and the coloured horizontal dotted lines indicated the means.*
 
 
 #####Page break
-
-<!-- ################################################################################## -->
-<!-- Plot scale jumps                                                     -->
-<!-- ################################################################################## -->
-
-```{r echo=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
-
-fig_nums(name    = "scalejumps", level = 1, display = FALSE, 
-         caption = "Retrospective scale difference (phi) for 9 species derived from historical assessment records. Results from pairwise comparisons over periods of 5 years. Large dots  refer to years when the scale difference is larger than 20%. Colours indicate the decades. Black triangles indicate benchmark assessment years. The bottom part of the panels shows the assessment methods being deployed, the upper part of the panels the stock definitions.")
-
-# res <- pairwise_comparisons(removelastyears = 0, numberofyears=10, threshold = 0.10)
-
-# threshold <- 0.10
-mynyears      <- 5
-myremoveyears <- 0
-mythreshold   <- 0.2
-myvar         <- "stocksize"
-mytitle       <- paste0(myvar, ", number of years: ",mynyears, ", threshold: ", 
-                        comma_format(digits=1, suffix="%")(100*mythreshold))
-
-
-
-# res$d.pcm %>% View()
-# res$d.pcm %>% ungroup() %>% distinct(threshold)
-
-# plot scale jumps between assessments
-t <-
-  res$d.pcm %>% 
-  filter(variable        == myvar,
-         numberofyears   == mynyears,
-         removelastyears == myremoveyears,
-         threshold       == mythreshold) %>% 
-  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
-  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
-  gather(key=metric, value=value, c(phi)) 
-
-t %>%   
-  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
-  theme_publication() +
-  theme(
-    panel.spacing    = unit(0.1, "lines"),
-    panel.grid.major.x = element_line(colour = "gray80"),
-    strip.background = element_blank(),
-    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
-    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), angle = 180),
-    strip.placement = "outside",
-    legend.position  = "none"
-  ) +
-  
-  # stock definition change
-  geom_rect(data=filter(d.stockdefinitionchange),
-            aes(xmin = y1, xmax=y2, ymin = 0.00, ymax=1.0), 
-            alpha=0.4, fill=myPurples[6], colour=myPurples[6], inherit.aes = FALSE) +
-  
-  geom_dl(data=filter(d.stockdefinitionchange),
-          aes(label  = stockkeylabelold, x = y1, y = 0.95),
-          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=1.0, vjust=0.9),
-          inherit.aes = FALSE, colour=brewer.pal(6, "Purples")[6]) +
-  
-  # assessmentmodel change
-  geom_rect(data=filter(d.assessmentmodels),
-            aes(xmin = y1, xmax=y2, ymin = -1.0, ymax=0.0, fill=rank), 
-            alpha=0.4, colour=myBlues[6], inherit.aes = FALSE) +
-  
-  geom_dl(data=filter(d.assessmentmodels),
-          aes(label  = assessmentmodel, x = y1, y = -0.95),
-          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=0.0, vjust=0.9),
-          inherit.aes = FALSE, colour=myBlues[6]) +
-  
-  geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
-  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
-  geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
-  
-  geom_line (aes(colour=factor(decade))) +
-  geom_point(aes(colour=factor(decade), size = ifelse( scale_jump, 0.3, 0.0001))) +
-  # geom_point(aes(colour=factor(decade), size = abs(value) )) +
-  
-  geom_point(data=filter(d.benchmarks, benchmark == 1),
-            aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
-  
-  geom_point(data=filter(d.assessments, assessmentmodelchange == 1),
-            aes(x=assessmentyear-0.1, y=-1.0), colour="red", fill="red", shape=24, size=2) +
-  
-  coord_cartesian(ylim=c(-1, 1),
-                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
-  
-  scale_fill_manual(values = myBlues) +
-        
-  scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
-  scale_x_continuous(breaks = pretty_breaks()) +
-  
-  labs(x=" ", y="", title=mytitle) +
-  facet_wrap(~stock)
-
-
-```
-
-*`r fig_nums("scalejumps")`*
-
 
 ```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -824,14 +712,114 @@ res$d.pcm %>%
 
 
 
-*`r fig_nums("metricsinpeels")`*
+*Figure 4: Example of an evaluation of the sensitivity of scale-jumps to the number of years over which the means are calculated (2, 5 or 10 years; columns) and the threshold for defin-ing a scale-jump (0.1, 0.2; rows) based on the historical assessments of NEA Mackerel. Dot-ted horizontal lines indicate the thresholds. Large dots refer to years when the scale differ-ence is larger than the threshold. Colours indicate the decades.*
+
+#####page break
+
+<!-- ################################################################################## -->
+<!-- Plot scale jumps                                                     -->
+<!-- ################################################################################## -->
+
+```{r echo=FALSE, fig.align="center", fig.asp=1.0, message=FALSE, warning=FALSE}
+
+#  res <- pairwise_comparisons(removelastyears = 0, numberofyears=10, threshold = 0.10)
+
+# threshold <- 0.10
+mynyears      <- 5
+myremoveyears <- 0
+mythreshold   <- 0.1
+myvar         <- "stocksize"
+mytitle       <- paste0(myvar, ", number of years: ",mynyears, ", threshold: ", 
+                        comma_format(digits=1, suffix="%")(100*mythreshold))
+
+
+
+# res$d.pcm %>% View()
+# res$d.pcm %>% ungroup() %>% distinct(threshold)
+
+# plot PCM by year with meta-data included
+t <-
+  res$d.pcm %>% 
+  filter(variable        == myvar,
+         numberofyears   == mynyears,
+         removelastyears == myremoveyears,
+         threshold       == mythreshold) %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, removelastyears, numberofyears, threshold) %>%
+  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
+  gather(key=metric, value=value, c(phi)) 
+
+t %>%   
+  ggplot(aes(x=assessmentyear, y=value, group=stock)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  # stock definition change
+  geom_rect(data=filter(d.stockdefinitionchange),
+            aes(xmin = y1, xmax=y2, ymin = 0.00, ymax=1.0), 
+            alpha=0.4, fill=myPurples[6], colour=myPurples[6], inherit.aes = FALSE) +
+  
+  geom_dl(data=filter(d.stockdefinitionchange),
+          aes(label  = stockkeylabelold, x = y1, y = 0.95),
+          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=1.0, vjust=0.9),
+          inherit.aes = FALSE, colour=brewer.pal(6, "Purples")[6]) +
+  
+  # assessmentmodel change
+  geom_rect(data=filter(d.assessmentmodels),
+            aes(xmin = y1, xmax=y2, ymin = -1.0, ymax=0.0, fill=rank), 
+            alpha=0.4, colour=myBlues[6], inherit.aes = FALSE) +
+  
+  geom_dl(data=filter(d.assessmentmodels),
+          aes(label  = assessmentmodel, x = y1, y = -0.95),
+          method = list(dl.combine("first.points"), rot = 90, cex = 0.6, hjust=0.0, vjust=0.9),
+          inherit.aes = FALSE, colour=myBlues[6]) +
+  
+  geom_hline(aes(yintercept = threshold), colour="gray80", linetype="dashed", size=0.5) +
+  geom_hline(aes(yintercept = 0), colour="gray20", size=0.5) +
+  geom_hline(aes(yintercept = -threshold), colour="gray80", linetype="dashed", size=0.5) +
+  
+  geom_line (aes(colour=factor(decade))) +
+  geom_point(aes(colour=factor(decade), size = ifelse( scale_jump, 0.3, 0.0001))) +
+  # geom_point(aes(colour=factor(decade), size = abs(value) )) +
+  
+  geom_point(data=filter(d.benchmarks, benchmark == 1),
+            aes(x=assessmentyear+0.1, y=1.0), colour="gray20", fill="gray20", shape=25, size=2) +
+  
+  # geom_point(data=filter(d.assessments, assessmentmodelchange == 1),
+  #           aes(x=assessmentyear-0.1, y=-1.0), colour="red", fill="red", shape=24, size=2) +
+  
+  coord_cartesian(ylim=c(-1, 1),
+                  xlim=c(1980, 2018)) +  # set the limits in cartesian space prevents outlier lines to be excluded
+  
+  scale_fill_manual(values = myBlues) +
+        
+  scale_y_continuous(breaks = pretty_breaks(), labels=percent_format()) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  
+  labs(x=" ", y="", title=mytitle) +
+  facet_wrap(~stock)
+
+
+```
+
+*Figure 5: Scale-jumps for nine species derived from historical assessment records. Results from pairwise comparisons over periods of 5 years and a threshold of 10%. Large dots refer to years when the scale difference is larger than the threshold. Colours indicate the decades. Black triangles indicate benchmark assessment years. The bottom part of the panels shows the assessment methods being deployed, the upper part of the panels the stock definitions.*
+
+
+
 
 
 <!-- ################################################################################## -->
 <!-- COmpare scale jumps when stock definition changed                                  -->
 <!-- ################################################################################## -->
 
-```{r echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+```{r echo=FALSE, fig.asp=0.6, fig.align="center", message=FALSE, warning=FALSE}
 
 # Compare scale jumps when stock definition has changed.
 
@@ -1006,67 +994,250 @@ t3 %>%
 
 ```
 
-*`r fig_nums("stockdefchange")`*
+*Figure 6: Comparisons of stock size (SSB) in assessments where stock definitions have changed. Blue-green is old stock definition, red is new stock definition*
 
 
   
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-<!-- ################################################################################## -->
-<!-- COmpare the number of scale jumps (as ratio) over time                             -->
-<!-- ################################################################################## -->
 
-```{r, eval=FALSE, fig.align="center", fig.asp=0.5, message=FALSE, warning=FALSE, include=FALSE}
-
-# NOT SHOWN, NOT USED
-
-
-d.jumps.byyear %>% 
-  filter(assessmentyear >= 1982) %>% 
   
-  ggplot(aes(x=assessmentyear, y=ratio)) +
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+```{r, eval=TRUE, fig.align="center", fig.asp=0.7, message=FALSE, warning=FALSE, include=FALSE}
+
+# plot number of scale jumps (relative) over time
+
+mynyears      <- 5
+myremoveyears <- 0
+mythreshold   <- 0.1
+myvar         <- "stocksize"
+mytitle       <- paste0(myvar, ", removed years: ", myremoveyears)
+
+t <-
+  res$d.pcm %>% 
+  filter(variable        == myvar,
+         numberofyears   == mynyears,
+         removelastyears == myremoveyears,
+         threshold       == mythreshold) %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, 
+           removelastyears, numberofyears, threshold) %>%
+  filter(!is.na(scale_jump)) %>% 
+  mutate(    decade = as.character(10*floor(assessmentyear/10)) ) %>% 
+  group_by(variable, decade, assessmentyear, scale_jump) %>% 
+  summarize(n = n()) %>% 
+  group_by(variable, decade, assessmentyear) %>% 
+  mutate(prop = n / sum(n), 
+         nassess = sum(n))
+
+
+# scaling of the two axes
+ylim.prim <- c(0, 1)     # proportions
+ylim.sec  <- c(0, 9)     # number of assessments
+
+# calculations for two axes;
+# https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
+t %>%   
+  filter(scale_jump == TRUE) %>% 
+  
+  ggplot(aes(x=assessmentyear, y=prop)) +
   theme_publication() +
   theme(
     panel.spacing    = unit(0.1, "lines"),
     panel.grid.major.x = element_line(colour = "gray80"),
     strip.background = element_blank(),
-    strip.text.x     = element_text(size=8, face="bold", hjust=1, margin = margin(2,0,2,0, "mm")),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
     strip.placement = "outside",
-    legend.title    = element_blank(),
     legend.position  = "none"
   ) +
+  
   geom_bar(stat="identity") +
-  labs(x="", y="ratio") 
+  geom_line(aes(y = a + nassess * b), color = "red", size=1) +
+  scale_y_continuous("Proportion scale jumps", 
+                     sec.axis = sec_axis(~ (. - a)/b, 
+                                         name = "N Assessments", 
+                                         breaks=pretty_breaks(n=4))) +
+  labs(x="")
+
 
 
 
 ```
 
+*Figure 7: Number of scale jumps in stocksize for the nine stocks considered, using 5 year means and a threshold of 10%. The red line indicates the number of assessments included in the comparison (right hand y-axis)*
 
-*`r fig_nums("jumpratio")`*
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
+
+# plot number of scale jumps by stock and decade
+
+mynyears      <- 5
+myremoveyears <- 0
+mythreshold   <- 0.1
+myvar         <- "stocksize"
+mytitle       <- paste0(myvar, ", removed years: ", myremoveyears)
+
+t <-
+  res$d.pcm %>% 
+  filter(variable        == myvar,
+         numberofyears   == mynyears,
+         removelastyears == myremoveyears,
+         threshold       == mythreshold) %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, 
+           removelastyears, numberofyears, threshold) %>%
+  filter(!is.na(scale_jump)) %>% 
+  mutate(decade = (10*floor(assessmentyear/10)) ) %>% 
+  group_by(stock, variable, decade, scale_jump) %>% 
+  summarize(n = n()) %>% 
+  group_by(stock, variable, decade) %>% 
+  mutate(prop = n / sum(n), 
+         nassess = sum(n))
+
+
+t2 <-
+  t %>% 
+  ungroup() %>% 
+  distinct(stock, variable, decade, .keep_all = TRUE) %>% 
+  dplyr::select(-scale_jump, -n, -prop)
+
+# scaling of the two axes
+ylim.prim <- c(0, 1)     # proportions
+ylim.sec  <- c(0, 10)     # number of assessments
+
+# calculations for two axes;
+# https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
+t %>%   
+  filter(scale_jump == TRUE) %>% 
+  
+  ggplot(aes(x=decade, y=prop)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_bar(stat="identity") +
+  geom_line(data=t2, aes(y = a + nassess * b), color = "red", size=1) +
+  scale_y_continuous("Proportion scale jumps", 
+                     sec.axis = sec_axis(~ (. - a)/b, 
+                                         name = "N Assessments", 
+                                         breaks=pretty_breaks(n=4))) +
+  labs(x="") +
+  facet_wrap(~stock)
+
+
+
+
+
+```
+
+*Figure 8: Proportion of scale jumps in stocksize by stock and decade, using 5 year means and a threshold of 10%. The red line indicates the number of assessments included in the comparison (right hand y-axis)*
+
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
+
+# plot number of scale jumps by stock and decade
+
+mynyears      <- 5
+myremoveyears <- 0
+mythreshold   <- 0.1
+myvar         <- "stocksize"
+mytitle       <- paste0(myvar, ", removed years: ", myremoveyears)
+
+t <-
+  res$d.pcm %>% 
+  filter(variable        == myvar,
+         numberofyears   == mynyears,
+         removelastyears == myremoveyears,
+         threshold       == mythreshold) %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, 
+           removelastyears, numberofyears, threshold) %>%
+  filter(!is.na(scale_jump)) %>% 
+  
+  left_join(d.assessments, by=c("stock", "assessmentyear")) %>% 
+  filter(!is.na(assessmentmodel)) %>% 
+  
+  mutate(decade = (10*floor(assessmentyear/10)) ) %>% 
+  group_by(assessmentmodel, variable, scale_jump) %>% 
+  summarize(n = n()) %>% 
+  spread(key=scale_jump, value=n) %>% 
+  setNames(., gsub("TRUE","jump", names(.))) %>% 
+  setNames(., gsub("FALSE","nojump", names(.))) %>% 
+  mutate(jump    = replace_na(jump, 0),
+         nojump  = replace_na(nojump, 0),
+         nassess = jump + nojump, 
+         prop    = jump / nassess) %>% 
+  arrange(-prop) %>% 
+  ungroup() %>% 
+  mutate(rank = dense_rank(desc(prop))) %>% 
+  filter(nassess > 3)
+
+
+# scaling of the two axes
+ylim.prim <- c(0, 100)   # number of assessments  
+ylim.sec  <- c(0, 1)     # proportions
+
+# calculations for two axes;
+# https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- b*(ylim.prim[1] - ylim.sec[1])
+
+t %>%   
+  # filter(scale_jump == TRUE) %>% 
+  
+  ggplot(aes(x=assessmentmodel, y=nassess)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_bar(aes(x = reorder(assessmentmodel, -rank), 
+                y = a + prop * b ), stat="identity") +
+  geom_line(aes(y = nassess, group=1), color = "red", size=0.8) +
+  geom_point(aes(y = nassess), color = "red", size=1.2) +
+  scale_y_continuous("N Assessments", 
+                     sec.axis = sec_axis(~ (. - a)/b, 
+                                         name = "Proportion scale jumps", 
+                                         breaks=pretty_breaks(n=4))) +
+  labs(x="") +
+  coord_flip() 
+
+
+
+
+```
+
+*Figure 9: Proportion of scale jumps in stocksize by method, using 5 year means and a threshold of 10% (bars, top axis. The red line indicates the number of assessments included in the comparison (bottom axis)*
 
 
 ```{r, eval=FALSE, fig.align="center", fig.asp=0.5, message=FALSE, warning=FALSE, include=FALSE}
