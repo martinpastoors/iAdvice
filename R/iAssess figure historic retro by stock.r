@@ -61,9 +61,11 @@ d <-
   # filter(grepl("her-67bc", stockkeylabelold) ) %>% 
   # filter(grepl("her-4", stockkeylabelold) ) %>%
   # filter(grepl("her-nirs", stockkeylabelold) ) %>% 
+  # filter(stockkeylabelold == "hom-west") %>%
   # filter(grepl("hom-west", stockkeylabelold) ) %>%
-  filter(grepl("whb-comb", stockkeylabelold) ) %>%
-  
+  # filter(grepl("whb-comb", stockkeylabelold) ) %>%
+  filter(grepl("mac-nea", stockkeylabelold) ) %>%
+
   # filter(grepl("mac-nea|hom-west|whb-comb|her-noss", stockkeylabelold) ) %>% 
   # filter(grepl("whb", stockkeylabelold) ) %>% 
   # filter(grepl("noss", stockkeylabelold) ) %>% 
@@ -82,7 +84,8 @@ d <-
          landings, catches, 
          recruitment, lowrecruitment, highrecruitment, 
          fishingpressure, lowfishingpressure, highfishingpressure, 
-         stocksize, lowstocksize, highstocksize) %>%
+         stocksize, lowstocksize, highstocksize,
+         stocksizeunits, fishingpressureunits, catcheslandingsunits, unitofrecruitment) %>%
   
   mutate(purpose = ifelse(assessmentyear == max(assessmentyear) &
                                   purpose %in% c("advice","update"),
@@ -104,6 +107,7 @@ d <-
 
   data.frame()
 
+# iAssess %>% filter(grepl("hom-west", stockkeylabelold), assessmentyear == 2003) %>% View()
 
 # d %>% 
 #   filter(assessmentyear >= 2018,
@@ -122,7 +126,8 @@ last <-
   select(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, year, 
          laststocksize = stocksize, lowstocksize, highstocksize, 
          lastfishingpressure=fishingpressure, lowfishingpressure, highfishingpressure, 
-         lastrecruitment = recruitment, lowrecruitment, highrecruitment, purpose)
+         lastrecruitment = recruitment, lowrecruitment, highrecruitment, purpose,
+         stocksizeunits, fishingpressureunits, unitofrecruitment, catcheslandingsunits)
 
 withdrawn <-
   d %>% 
@@ -131,9 +136,13 @@ withdrawn <-
          lastrecruitment = recruitment, lowrecruitment, highrecruitment, purpose)
 
 rp <-
-  sagrefpoints %>% 
+  iAdvice %>% 
+  # sagrefpoints %>% 
   filter(stockkeylabelold %in% unique(d$stockkeylabelold)) %>% 
+  
   filter(assessmentyear == lastyear) %>% 
+  # filter(assessmentyear == lastyear-1) %>% 
+  
   distinct(stockkeylabel, stockkeylabelold, stockkeylabelnew, fpa, fmsy, blim, msybtrigger)
 
 # d %>% filter(assessmentyear == 1983)  %>% View()
@@ -151,6 +160,7 @@ rp <-
 p1 <-
   d %>% 
   filter(!is.na(stocksize)) %>%  
+  filter(stocksizeunits == "tonnes") %>% 
   # filter(grepl("2016", tyear)) %>% 
   # filter(purpose == "withdrawn") %>% 
   # View()
@@ -193,8 +203,6 @@ p1 <-
   labs(x = NULL, y = NULL , title = "SSB")  +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
   # facet_grid(stockkeylabelold ~ purpose, scales="free_y")
-
-p1
 
 # plot f
 p2 <-
@@ -281,11 +289,11 @@ p3 <-
   labs(x = NULL, y = NULL , title = "recruitment")   +
   facet_grid(stockkeylabelold ~ ., scales="free_y")
 
-plot_grid(p2 + theme(legend.position  = "none",
+plot_grid(p1 + theme(legend.position  = "none",
                      axis.title       = element_blank(),
                      strip.background = element_rect(colour=NA, fill=NA),
                      strip.text       = element_text(colour=NA)),
-          p3 + theme(axis.title       = element_blank(),
+          p2 + theme(axis.title       = element_blank(),
                      strip.background = element_rect(colour=NA, fill=NA),
                      strip.text       = element_text(colour=NA)),
           ncol=2, align = 'h', rel_widths = c(3.5,3.5))

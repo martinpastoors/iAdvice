@@ -40,6 +40,8 @@
 # 06/05/2019 dplyr update. Changed "funs" to "list" in mutate_at functions 
 # 15/05/2019 removed double assessments from SAG
 # 15/08/2019 removed doubles arising from iAdvice and SAG coupling on purpose
+# 04/09/2019 added manual allocation of hom-nsea 2019 assessment
+# 04/09/2019 fixed strange error: mutate with multiple ifelse gave logical; now each line a separate mutate with ifelse works well
 # -----------------------------------------------------------------------------------------------
 
 # rm(list=ls())
@@ -215,7 +217,7 @@ sd <-
 # -----------------------------------------------------------------------------------------
 # load SAG full data (see: DownloadDataFromSAG.r)
 # -----------------------------------------------------------------------------------------
-# sag %>% filter(assessmentyear == 2019, stockkeylabel=="her.27.6a7bc") %>% View()
+# sag %>% filter(assessmentyear == 2019, stockkeylabelold=="hom-nsea") %>% View()
 
 sag <- 
   get(load(file=paste(dropboxdir, "/rdata/iSAGstock.RData",sep=""))) %>% 
@@ -224,7 +226,13 @@ sag <-
   # left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   # left_join(iStockkey, by="stockkey") %>% 
   
-  # remove custom fields for now
+  # sag %>% filter(stockkeylabelold == "hom-nsea" & assessmentyear == 2019) %>% View()
+  
+  # !!!! manual allocation of hom-nsea assessment (from custom to stocksize)
+  # mutate() %>% 
+  #   stocksize = ifelse(stockkeylabelold == "hom-nsea" & assessmentyear == 2019, )
+  
+# remove custom fields for now
   dplyr::select(-starts_with("custom")) %>% 
   
   # remove assessmentkey (prevents appropriate merging)
@@ -296,8 +304,10 @@ only_in_sag <-
   anti_join(sag_unique, qcsexcel_unique)
 
 # incommon %>% filter(stockkey == 169049) %>% View()
+# incommon %>% filter(stockkeylabelold == "hom-nsea) %>% View()
 # only_in_qcsexcel %>% filter(stockkey == 169049) %>% View()
 # only_in_sag %>% filter(stockkey == 169049) %>% View()
+# only_in_sag %>% filter(stockkeylabelold == "hom-nsea") %>% View()
 
 # -----------------------------------------------------------------------------------------
 # merge filesets
@@ -344,12 +354,11 @@ iadvice_to_merge <-
 
 # generate iAssess
 iAssess <-
-  
+# t <-
   bind_rows(sag_to_merge, qcsexcel_to_merge) %>% 
   ungroup() %>% 
   
   # add information from iAdvice and add source if not already existing
-  
   # left_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>% 
   full_join(iadvice_to_merge, by=c("stockkey", "stockkeylabel", "stockkeylabelold","stockkeylabelnew", "assessmentyear","purpose")) %>%
   mutate(source = ifelse(is.na(source), "iadvice", source)) %>%
@@ -364,71 +373,78 @@ iAssess <-
               "fishingpressureunits", "fishingpressuredescription",
               "catcheslandingsunits"), list(tolower)) %>% 
   
-  # do unit conversions
-  mutate(
-    
-    # recruitment
-    recruitment       = ifelse(unitofrecruitment == "millions", 1000*recruitment, recruitment),
-    lowrecruitment    = ifelse(unitofrecruitment == "millions", 1000*lowrecruitment, lowrecruitment),
-    highrecruitment   = ifelse(unitofrecruitment == "millions", 1000*highrecruitment, highrecruitment),
-    unitofrecruitment = ifelse(unitofrecruitment == "millions", "thousands", unitofrecruitment),
-    
-    unitofrecruitment = ifelse(stockkeylabelold == "had-iris" & assessmentyear == 2016, "thousands", unitofrecruitment),
-    unitofrecruitment = gsub("no/","n/", unitofrecruitment),
-    unitofrecruitment = ifelse(unitofrecruitment == "select units", NA, unitofrecruitment),
-    
-    recruitmentdescription = ifelse(recruitmentdescription == "select recruitment type", NA, recruitmentdescription),
-    
-    # stock size
-    stocksize       = ifelse(stocksizeunits == "thousand tonnes", 1000*stocksize, stocksize),
-    lowstocksize    = ifelse(stocksizeunits == "thousand tonnes", 1000*lowstocksize, lowstocksize),
-    highstocksize   = ifelse(stocksizeunits == "thousand tonnes", 1000*highstocksize, highstocksize),
-    tbiomass        = ifelse(stocksizeunits == "thousand tonnes", 1000*tbiomass, tbiomass),
-    lowtbiomass     = ifelse(stocksizeunits == "thousand tonnes", 1000*lowtbiomass, lowtbiomass),
-    hightbiomass    = ifelse(stocksizeunits == "thousand tonnes", 1000*hightbiomass, hightbiomass),
-    stocksizeunits  = ifelse(stocksizeunits == "thousand tonnes", "tonnes", stocksizeunits),
-    
-    # stocksizeunits
-    stocksizeunits  = ifelse(stocksizeunits == "cpue (kg/1000 hooks)", "kg/1000 hooks", stocksizeunits),
-    stocksizeunits  = ifelse(stocksizeunits == "n/hr", "n/hour", stocksizeunits),
-    stocksizeunits  = ifelse(stocksizeunits == "kg/h", "kg/hour", stocksizeunits),
-    stocksizeunits  = ifelse(stocksizeunits == "select units", NA, stocksizeunits),
-    
-    # stocksizedescription
-    stocksizedescription = gsub("stock size: |stock size index: ","",stocksizedescription),
-    stocksizedescription = ifelse(stocksizedescription == "select stock size description", NA, stocksizedescription),
-    
-    # catcheslandingsunits
-    catcheslandingsunits = ifelse(catcheslandingsunits == "t", "tonnes", catcheslandingsunits), 
-    
-    # fishing pressure descriptions
-    fishingpressuredescription = gsub("fishing pressure: ","",fishingpressuredescription),
-    fishingpressuredescription = gsub(" in winter rings","", fishingpressuredescription),
-    fishingpressuredescription = ifelse(fishingpressuredescription == "select fishing pressure description", NA, fishingpressuredescription),
-    fage                       = ifelse(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription), 
-             str_extract(fishingpressuredescription, "[0-9]{1,2}-[0-9]{1,2}"), fage),
-    fishingpressuredescription = ifelse(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription), 
-             str_replace(fishingpressuredescription, "[0-9]{1,2}-[0-9]{1,2}", ""), fishingpressuredescription), 
-    fishingpressuredescription = gsub("\\(ages \\)|bar\\(\\)|mean |weighted ","", fishingpressuredescription),
-    fishingpressuredescription = gsub("harvest rate", "hr", fishingpressuredescription),
-    
-    # specific cases for cod 5a in 2016 and had 5a in 2018 (description is F; harvest rate in custom 2)
-    fishingpressuredescription = ifelse(stockkeylabel == "cod-iceg"   & assessmentyear == 2016, "f", fishingpressuredescription),
-    fishingpressuredescription = ifelse(stockkeylabel == "had.27.5a"  & assessmentyear == 2018, "f", fishingpressuredescription),
-    fishingpressuredescription = ifelse(is.na(fishingpressure) & !is.na(fishingpressuredescription), NA, fishingpressuredescription),
-    fishingpressuredescription = str_trim(fishingpressuredescription),
-      
-    # fishingpressureunits
-    fishingpressureunits       = ifelse(is.na(fishingpressure) & !is.na(fishingpressureunits), NA, fishingpressureunits),
-    fishingpressureunits       = ifelse(is.na(fishingpressureunits) & fishingpressuredescription == "f", "year-1",fishingpressureunits),
-    fishingpressureunits       = ifelse(fishingpressureunits == "per year", "year-1", fishingpressureunits),
-    
-    # purpose
-    purpose                    = ifelse(purpose == "initadvice", "initial advice", purpose),
-    purpose                    = ifelse(purpose == "trends"    , "trends only", purpose),
-    purpose                    = ifelse(purpose == "forecast"  , "advice", purpose)
-    
-  ) %>% 
+  # filter(stockkeylabelold=="hom-nsea" & assessmentyear == 2019) %>% 
+  
+  #stocksize
+  mutate(stocksizeunits  = ifelse(is.na(stocksizeunits) ,"unknown", stocksizeunits)) %>% 
+  mutate(stocksize       = ifelse(stocksizeunits == "thousand tonnes", 1000*stocksize, 1*stocksize) ) %>% 
+  mutate(lowstocksize    = ifelse(stocksizeunits == "thousand tonnes", 1000*lowstocksize, lowstocksize)) %>% 
+  mutate(highstocksize   = ifelse(stocksizeunits == "thousand tonnes", 1000*highstocksize, highstocksize)) %>% 
+  mutate(tbiomass        = ifelse(stocksizeunits == "thousand tonnes", 1000*tbiomass, tbiomass)) %>% 
+  mutate(lowtbiomass     = ifelse(stocksizeunits == "thousand tonnes", 1000*lowtbiomass, lowtbiomass)) %>% 
+  mutate(hightbiomass    = ifelse(stocksizeunits == "thousand tonnes", 1000*hightbiomass, hightbiomass) ) %>% 
+  mutate(stocksizeunits  = ifelse(stocksizeunits == "thousand tonnes", "tonnes", stocksizeunits)) %>% 
+  
+  mutate(stocksizeunits  = ifelse(stocksizeunits == "cpue (kg/1000 hooks)", "kg/1000 hooks", stocksizeunits)) %>% 
+  mutate(stocksizeunits  = ifelse(stocksizeunits == "n/hr", "n/hour", stocksizeunits)) %>% 
+  mutate(stocksizeunits  = ifelse(stocksizeunits == "kg/h", "kg/hour", stocksizeunits)) %>% 
+  mutate(stocksizeunits  = ifelse(stocksizeunits == "select units", NA, stocksizeunits)) %>% 
+
+  mutate(stocksizedescription = gsub("stock size: |stock size index: ","",stocksizedescription)) %>% 
+  mutate(stocksizedescription = ifelse(stocksizedescription == "select stock size description", NA, stocksizedescription) ) %>% 
+  
+  # recruitment
+  mutate(unitofrecruitment  = ifelse(is.na(unitofrecruitment) ,"unknown", unitofrecruitment)) %>% 
+  mutate(recruitment       = ifelse(unitofrecruitment == "millions", 1000*recruitment, recruitment)) %>% 
+  mutate(lowrecruitment    = ifelse(unitofrecruitment == "millions", 1000*lowrecruitment, lowrecruitment)) %>% 
+  mutate(highrecruitment   = ifelse(unitofrecruitment == "millions", 1000*highrecruitment, highrecruitment)) %>% 
+  mutate(unitofrecruitment = ifelse(unitofrecruitment == "millions", "thousands", unitofrecruitment)) %>% 
+  mutate(recruitment       = ifelse(unitofrecruitment == "millions", 1000*recruitment, recruitment)) %>% 
+        
+  mutate(unitofrecruitment = ifelse(stockkeylabelold == "had-iris" & assessmentyear == 2016, "thousands", unitofrecruitment)) %>% 
+  mutate(unitofrecruitment = gsub("no/","n/", unitofrecruitment)) %>% 
+  mutate(unitofrecruitment = ifelse(unitofrecruitment == "select units", NA, unitofrecruitment)) %>% 
+  
+  mutate(recruitmentdescription = ifelse(recruitmentdescription == "select recruitment type", NA, recruitmentdescription) ) %>% 
+  
+  # catcheslandingsunits
+  mutate(catcheslandingsunits = ifelse(is.na(catcheslandingsunits) ,"unknown", catcheslandingsunits)) %>% 
+  mutate(catcheslandingsunits = ifelse(catcheslandingsunits == "t", "tonnes", catcheslandingsunits)) %>% 
+
+  # fishing pressure 
+  mutate(fishingpressureunits  = ifelse(is.na(fishingpressureunits) ,"unknown", fishingpressureunits)) %>% 
+  
+  mutate(fishingpressuredescription = gsub("fishing pressure: ","",fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = gsub(" in winter rings","", fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = ifelse(fishingpressuredescription == "select fishing pressure description", NA, fishingpressuredescription)) %>% 
+  mutate(fage                       = ifelse(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription),
+                                             str_extract(fishingpressuredescription, "[0-9]{1,2}-[0-9]{1,2}"),
+                                             fage) ) %>% 
+  mutate(fishingpressuredescription = ifelse(grepl("[0-9]{1,2}-[0-9]{1,2}", fishingpressuredescription),
+                                             str_replace(fishingpressuredescription, "[0-9]{1,2}-[0-9]{1,2}", ""),
+                                             fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = gsub("\\(ages \\)|bar\\(\\)|mean |weighted ","", fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = gsub("harvest rate", "hr", fishingpressuredescription)) %>% 
+
+                        
+  # specific cases for cod 5a in 2016 and had 5a in 2018 (description is F; harvest rate in custom 2)
+  mutate(fishingpressuredescription = 
+           ifelse(stockkeylabel == "cod-iceg"   & assessmentyear == 2016, "f", fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = 
+           ifelse(stockkeylabel == "had.27.5a"  & assessmentyear == 2018, "f", fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = 
+           ifelse(is.na(fishingpressure) & !is.na(fishingpressuredescription), NA, fishingpressuredescription)) %>% 
+  mutate(fishingpressuredescription = str_trim(fishingpressuredescription)) %>% 
+                            
+  # fishingpressureunits
+  mutate(fishingpressureunits       = ifelse(is.na(fishingpressure) & !is.na(fishingpressureunits), NA, fishingpressureunits)) %>% 
+  mutate(fishingpressureunits       = ifelse(is.na(fishingpressureunits) & fishingpressuredescription == "f", "year-1",fishingpressureunits)) %>% 
+  mutate(fishingpressureunits       = ifelse(fishingpressureunits == "per year", "year-1", fishingpressureunits)) %>% 
+                            
+  # purpose
+  mutate(purpose                    = ifelse(purpose == "initadvice", "initial advice", purpose)) %>% 
+  mutate(purpose                    = ifelse(purpose == "trends"    , "trends only", purpose)) %>% 
+  mutate(purpose                    = ifelse(purpose == "forecast"  , "advice", purpose) ) %>% 
   
   # remove historical (only used once)
   filter(purpose != "historical") %>% 
@@ -442,6 +458,9 @@ iAssess <-
   arrange(speciesfaocode, stockkey, assessmentyear, purpose)
 
 save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+
+# iAssess %>% filter(stockkeylabelold=="hom-nsea" & assessmentyear == 2019) %>% View()
+# glimpse(iAssess)
 
 # unique(iAssess$source)
 

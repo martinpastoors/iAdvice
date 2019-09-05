@@ -119,7 +119,7 @@ stocks_toplot <-
   iAdvice %>% 
   
   filter(grepl("her", stockkeylabel),
-         !stockkeylabel %in% c("her.27.1-24a514a","her.27.5a"),
+         # !stockkeylabel %in% c("her.27.1-24a514a","her.27.5a"),
          assessmentyear == 2018) %>%
   # filter(stockkeylabelold %in% c("her-67bc", "her-vian","her-irlw"),
   #        assessmentyear == 2018) %>%
@@ -169,10 +169,13 @@ stocks_toplot %>%
   # geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour="black") +
   
   # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
-  geom_sf_label(aes(label = stockkeylabel), alpha=0.9) +
+  # geom_sf_label(aes(label = stockkeylabel), alpha=0.9) +
   ggmisc::scale_fill_crayola() +
   facet_wrap(~stockkeylabel)
 # facet_grid(variable~assessmentyear)
+
+# save to shape file
+st_write(stocks_toplot, dsn = "herring_stocks.shp", layer = "herring.shp", driver = "ESRI Shapefile")
 
 
 # ----------------------------------------------------------------------------------------------------------
