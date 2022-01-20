@@ -7,14 +7,9 @@ output:
 ```{r, message=FALSE, warning=FALSE, include=FALSE}
 
 # -----------------------------------------------------------------------------------------------
-# Analyse changes in pelagic stocks.Rmd
+# Analyse zero catch advice.Rmd
 #
-# 07/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
-# 10/01/2018 made small changes to the table
-# 04/05/2019 updated for WKRRMAC 2019; focus on mackerel
-# 06/06/2019 changed the data frame d; now also has purpose
-# 03/09/2019 updated after WGWIDE 2019
-# 02/10/2019 updated for pelagic forum
+# 26/02/2020 adapted from Analyse changes in pelagic stocks
 # -----------------------------------------------------------------------------------------------
 
 require("knitr")
@@ -47,8 +42,8 @@ load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 adv <-
   iAdvice %>% 
   
-  filter(grepl("mac-67|mac-nea|whb-c|whb-n|her-noss|her-47d3",
-               stockkeylabelold)) %>%
+  # filter(grepl("mac-67|mac-nea|whb-c|whb-n|her-noss|her-47d3",
+  #              stockkeylabelold)) %>%
   # filter(grepl("her-47|mac-67|mac-nea|whb-c|whb-n|hom-c|hom-w|her-3a22|her-noss",
   #              stockkeylabelold)) %>%
   # filter(grepl("mac-67|mac-nea", 
@@ -60,7 +55,7 @@ adv <-
   filter(purpose %in% c("advice","replaced", "benchmark")) %>% 
   mutate(id      = paste0(stockkeylabelold, assessmentyear, assessmentdate, purpose)) %>% 
   
-  filter(assessmentyear >= 2008) %>% 
+  filter(assessmentyear >= 2000) %>% 
   ungroup()
 
 adv_ssb <-
@@ -149,13 +144,63 @@ ass_10year <-
 
 
 
-**Analysis of advice changes in a number of key pelagic stocks**
+**Analysis of zero catch advice**
 
 Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
 
 **Introduction**
 
 In this document an overview is presented of the ICES advice for a number of key pelagic stocks relevant to the Pelagic Advisory Council (her-347d, her-noss, her-3a22, hom-west, mac-nea, whb-comb). The analysis is based on ICES advice database (Pastoors et al, in prep.) and the ICES stock assessment graph database ( [ICES SAG](www.http://ices.dk/marine-data/tools/Pages/stock-assessment-graphs.aspx)). The document outlines changes in reference points, changes in advice and a comparison between stock size assumed as the basis for the forecast and the most recent estimates of stock size from the 2018 assessments.    
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+adv %>% 
+  filter(purpose == "advice") %>% 
+  filter(advisedlandingsmax == 0 | advisedcatchmax == 0) %>%  
+  filter(tacyear <= 2018) %>% 
+  filter(!is.na(tal)) %>% 
+  dplyr::select(speciesfaocode, stockkeylabelold, assessmentyear, tacyear, advisedlandingsmax, tal, landings, catches) %>%
+  ungroup() %>% 
+  mutate(catch     = ifelse(!is.na(catches), catches, landings)) %>% 
+  mutate(zerotac   = ifelse(tal   == 0, 1, 0)) %>% 
+  mutate(zerocatch = ifelse(catch == 0, 1, 0)) %>% 
+  # View()
+  group_by(tacyear) %>% 
+  summarize(nzeroadvice = n(),
+            nzerotac    = sum(zerotac, na.rm=TRUE),
+            nzerocatch  = sum(zerocatch, na.rm=TRUE)) %>% 
+  gather(key="variable", value="data", nzeroadvice:nzerocatch) %>% 
+  
+  ggplot(aes(x=tacyear)) +
+  theme_publication() +
+  theme(legend.title = element_blank()) +
+  
+  geom_line(aes(y=data, group=variable, colour=factor(variable))) +
+  geom_point(aes(y=data, group=variable, colour=factor(variable))) +
+  
+  scale_x_continuous(breaks=pretty_breaks()) +
+  expand_limits(y=0) + 
+  labs(y="N stocks") 
+#  facet_wrap(~variable)
+
+```
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+adv %>% 
+  filter(purpose == "advice") %>% 
+  filter(advisedlandingsmax == 0 | advisedcatchmax == 0) %>%  
+  filter(tacyear <= 2018) %>% 
+  filter(!is.na(tal)) %>% 
+  dplyr::select(speciesfaocode, stockkeylabelold, stockkeylabelnew, assessmentyear, tacyear, advisedlandingsmax, tal, landings, catches) %>%
+  ungroup() %>% 
+  mutate(catch     = ifelse(!is.na(catches), catches, landings)) %>% 
+  mutate(zerotac   = ifelse(tal   == 0, 1, 0)) %>% 
+  mutate(zerocatch = ifelse(catch == 0, 1, 0)) %>% 
+  
+  write.csv(file="zerocatch.csv", row.names = FALSE)
+
+```
 
 **Changes in F reference points**
 

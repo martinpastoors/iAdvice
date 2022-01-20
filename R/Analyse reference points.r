@@ -14,7 +14,7 @@ library(cowplot)       # multiplots
 library(directlabels)  # for printing labels at end of geom lines
 
 # Load utils code
-source("../mptools/r/my_utils.r")
+source("../mptools/r/my utils.r")
 
 # Set working directory to dropbox folder
 advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -93,6 +93,9 @@ iAdvice %>%
 # -----------------------------------------------------------------------------------------
 
 mystock <- "hom-west"
+mystock <- "her-47d3"
+mystock <- "her-3a22"
+mystock <- "ple-nsea"
 
 iAdvice %>% 
   filter(stockkeylabelold == mystock) %>% 

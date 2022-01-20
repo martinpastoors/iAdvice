@@ -22,7 +22,7 @@ library(stringr)       # for string manipulation
 options(icesSAG.use_token = TRUE)
 
 # Load utils code
-source("../mptools/r/my_utils.r")
+source("../mptools/r/my utils.r")
 
 # Set dropbox folder
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -42,14 +42,13 @@ today <- format(Sys.time(), '%Y%m%d')
 # which year (set year = 0 for all years)
 # =====================================================================================
 
-myyear <- 2019
+myyear <- 2020
+mystocks <- c("hom.27.2a4a5b6a7a-ce-k8","mac.27.nea","whb.27.1-91214","her.27.1-24a514a")
 
-# =====================================================================================
-# generate list of assessmentkeys
-# =====================================================================================
+# Load assessment data
+assessmentkeys <- sort(findAssessmentKey(mystocks, year=myyear))
 
-assessmentkeys <- sort(findAssessmentKey(year=myyear))
-
+# assessmentkeys <- sort(findAssessmentKey(year=myyear))
 # assessmentkeys <- findAssessmentKey(year=1983, full=TRUE)
 # assessmentkeys <- sort(findAssessmentKey())
 # assessmentkeys[assessmentkeys == 10362]
@@ -82,7 +81,7 @@ for (i in 1:length(t1)) {
     
     tmp <-
       t1[[i]] %>% 
-      mutate_all(funs("as.character")) %>% 
+      mutate_all(list("as.character")) %>% 
       lowcase() 
     
     t2  <- bind_rows(t2, tmp)
