@@ -42,6 +42,7 @@
 # 15/08/2019 removed doubles arising from iAdvice and SAG coupling on purpose
 # 04/09/2019 added manual allocation of hom-nsea 2019 assessment
 # 04/09/2019 fixed strange error: mutate with multiple ifelse gave logical; now each line a separate mutate with ifelse works well
+# 09/06/2020 updated version of iadvice tables (more details on stf)
 # -----------------------------------------------------------------------------------------------
 
 # rm(list=ls())
@@ -55,7 +56,7 @@ library(cowplot)       # multiplots
 library(directlabels)  # for printing labels at end of geom lines
 
 # Load utils code
-source("../mptools/r/my_utils.r")
+source("../mptools/r/my utils.r")
 
 # Set working directory to dropbox folder
 dropboxdir  <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -78,7 +79,8 @@ iAdvice <-
               "advisedlandingsmax", "advisedcatchmax",
               "tal", "tac",
               "officiallandings", "landings", "ibc", "discards", "catches",
-              "fsqay", "ssbay", "fadvmax",
+              "fsqimy", "ssbimy", "fadvmax",
+              "catchrealized","catch1fcy","catch2fcy","f1fcy","f2fcy","ssb1fcy","ssb2fcy","fset","ssbset",
               "fmax", "f01", "fmed", "f35spr", "flim", "fpa", "fmsy",
               "blim", "bpa", "msybtrigger",
               "m1", "m5"),
@@ -468,31 +470,37 @@ save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 # filter(iAssess, purpose=="historical") %>% View()
 
 # create overviews
-t1 <-
-  sag_unique %>% 
-  ungroup() %>% 
-  mutate(purpose = toupper(substr(purpose,1,1))) %>% 
-  group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
-  arrange(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear, purpose) %>% 
-  summarize(purpose= paste(purpose, collapse="")) 
+# t1 <-
+#   sag_unique %>% 
+#   ungroup() %>% 
+#   mutate(purpose = toupper(substr(purpose,1,1))) %>% 
+#   group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
+#   arrange(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear, purpose) %>% 
+#   summarize(purpose= paste(purpose, collapse="")) 
 
-t2 <-
-  qcsexcel_unique %>% 
-  ungroup() %>% 
-  mutate(purpose = ifelse(grepl("bench",purpose), "bench", purpose)) %>% 
-  mutate(purpose = ifelse(grepl("exploratory|trendsonly",purpose), "unofficial", purpose)) %>% 
-  mutate(purpose = tolower(substr(purpose,1,1))) %>% 
-  group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
-  arrange(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear, purpose) %>% 
-  summarize(purpose= paste(purpose, collapse="")) 
+# t2 <-
+#   qcsexcel_unique %>% 
+#   ungroup() %>% 
+#   mutate(purpose = ifelse(grepl("bench",purpose), "bench", purpose)) %>% 
+#   mutate(purpose = ifelse(grepl("exploratory|trendsonly",purpose), "unofficial", purpose)) %>% 
+#   mutate(purpose = tolower(substr(purpose,1,1))) %>% 
+#   group_by(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
+#   arrange(stockkey, stockkeylabel, stockkeylabelnew, stockkeylabelold, assessmentyear, purpose) %>% 
+#   summarize(purpose= paste(purpose, collapse="")) 
 
-bind_rows(t1,t2) %>% 
-  filter(!is.na(stockkey)) %>% 
-  group_by(stockkeylabelold, stockkeylabelnew, stockkey, assessmentyear) %>% 
-  arrange(stockkeylabelold, stockkeylabelnew, stockkey, assessmentyear, purpose) %>% 
-  summarize(purpose= paste(purpose, collapse="")) %>% 
-  spread(key=assessmentyear, value=purpose) %>% 
-  write.csv(., file="iDatabases overview.csv", row.names=FALSE)
+# bind_rows(t1,t2) %>% 
+#   filter(!is.na(stockkey)) %>% 
+#   group_by(stockkeylabelold, stockkeylabelnew, stockkey, assessmentyear) %>% 
+#   arrange(stockkeylabelold, stockkeylabelnew, stockkey, assessmentyear, purpose) %>% 
+#   summarize(purpose= paste(purpose, collapse="")) %>% 
+#   spread(key=assessmentyear, value=purpose) %>% 
+#   write.csv(., file=paste0("iDatabases overview ",today, ".csv"), row.names=FALSE)
+
+# iAssess %>% 
+#   filter(assessmentyear==2020) %>% 
+#   ungroup() %>% 
+#   distinct(stockkeylabel) %>% 
+#   View()
 
 
 

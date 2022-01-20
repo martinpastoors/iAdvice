@@ -39,7 +39,7 @@ y <- 2018
 i <- 0
 
 # loop over years
-for (y in 2000:2018) {
+for (y in 2018:2018) {
   
   fl <- list.files(path=file.path(my.path, y), 
                    pattern = "pdf$", 

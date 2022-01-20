@@ -22,7 +22,7 @@ library(maps)
 library(ggplot2)
 library(viridis)
 
-source("../mptools/r/my_utils.r")
+source("../mptools/r/my utils.r")
 # load("../prf/rdata/world.df.RData")
 
 # source("r/iDatabases generator.r")
@@ -35,6 +35,21 @@ dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # Load dataset
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+# ----------------------------------------------------------------------------------------------------------
+# count changes in areas
+# ----------------------------------------------------------------------------------------------------------
+
+iAdvice %>% 
+  filter(assessmentyear >= 1980) %>% 
+  filter(speciesfaocode=="cod") %>% 
+  ungroup() %>% 
+  distinct(stockkey, stockkeylabelold, assessmentyear, speciesfaocode, speciescommonname, stockarea) %>% 
+  # group_by(assessmentyear, speciesfaocode, speciescommonname) %>% 
+  # summarize(n=n()) %>% 
+  View()
+
+
 
 # ----------------------------------------------------------------------------------------------------------
 # load spatial objects in sf format
@@ -118,17 +133,19 @@ fao.eez.sf %>%
 stocks_toplot <- 
   iAdvice %>% 
   
-  filter(grepl("her", stockkeylabel),
-         # !stockkeylabel %in% c("her.27.1-24a514a","her.27.5a"),
-         assessmentyear == 2018) %>%
-  # filter(stockkeylabelold %in% c("her-67bc", "her-vian","her-irlw"),
-  #        assessmentyear == 2018) %>%
-  distinct(stockkeylabelold, stockkeylabel, stockarea) %>% 
+  filter(grepl("her", stockkeylabel)) %>% 
+  filter(assessmentyear >= 1980) %>%
+  filter(stockkeylabelold %in% c("her-vian","her-irlw", "her-irls", "her-nirs","her-67bc", 
+                                 "her-47d3","her-47d", "her-4a", "her-4b","her-4c7d","her-4ab")) %>% 
+  # filter(stockkeylabelold %in% c("her-vian","her-irlw", "her-irls", "her-nirs")) %>% 
+  mutate(stockkeylabelnew = ifelse(stockkeylabelold == "her-vian","her.27.6an", stockkeylabelnew),
+         stockkeylabelnew = ifelse(stockkeylabelold == "her-irlw","her.27.irlw", stockkeylabelnew)) %>% 
+  distinct(stockkeylabelold, stockkeylabel, stockkeylabelnew, stockarea, assessmentyear) %>% 
   
   # make "area" into a long table
   separate(stockarea, c(paste0("x",1:50)), sep = ";") %>%
   gather(key=dummy, value=F_CODE, x1:x50) %>%
-  drop_na() %>%
+  filter(!is.na(F_CODE)) %>%
   dplyr::select(-dummy) %>% 
   
   # link to the link table to get name of geometry
@@ -138,8 +155,10 @@ stocks_toplot <-
   st_sf() %>%
   
   # join areas together by stock and assessmentyear
-  group_by(stockkeylabelold, stockkeylabel) %>%
+  group_by(assessmentyear, stockkeylabelold, stockkeylabel) %>%
   summarise()
+
+# sort(unique(stocks_toplot$stockkeylabelold))
 
 # fao.eez.sf %>% filter(grepl("27.3", F_CODE)) %>% View()
 
@@ -154,7 +173,7 @@ stocks_toplot %>%
         strip.background = element_blank(),
         strip.text       = element_text(size=8, face="bold", hjust=0.5, margin = margin(0.1,0,0,0, "mm"))) +
   
-  theme(legend.title=element_blank()) +
+  # theme(legend.title=element_blank()) +
   theme(legend.position="none") +
   # theme(axis.text        = element_blank(),
   #       axis.ticks       = element_blank()) +
@@ -165,13 +184,14 @@ stocks_toplot %>%
   geom_sf(data=f, inherit.aes = FALSE, fill=NA, colour="gray", size=0.5) +
   # geom_sf_text(data=w, aes(label=rowname), inherit.aes = FALSE, fill="gray90") +
   
-  geom_sf(aes(fill = factor(stockkeylabel)), alpha=0.6, colour="black", size=1) +
+  geom_sf(aes(fill = factor(stockkeylabelold)), alpha=0.6, colour="black", size=1) +
   # geom_sf(aes(fill = factor(fishstock)), alpha=0.6, colour="black") +
   
   # coord_sf(xlim = c(-20,25), ylim = c(38,70)) +
   # geom_sf_label(aes(label = stockkeylabel), alpha=0.9) +
   ggmisc::scale_fill_crayola() +
-  facet_wrap(~stockkeylabel)
+  labs(x="",y="") +
+  facet_wrap(~assessmentyear)
 # facet_grid(variable~assessmentyear)
 
 # save to shape file

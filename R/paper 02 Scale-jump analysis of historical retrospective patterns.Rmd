@@ -8,7 +8,7 @@ output:
 ```{r, message=FALSE, warning=FALSE, include=FALSE}
 
 # -----------------------------------------------------------------------------------------------
-# Analyse changes in pelagic stocks.Rmd
+# Paper 02 Scale-jump analysis of historic retrospective patterns.Rmd
 #
 # 07/01/2019 first coding; adapted from ICES advice and assessment summaries.Rmd
 # 13/01/2019 now only figures and tables
@@ -826,7 +826,7 @@ t %>%
 mynyears      <- 5
 myremoveyears <- 0
 myvar         <- "stocksize"
-mytitle       <- paste0(toupper(myspecies), ", ", myvar, ", removed years: ", myremoveyears)
+# mytitle       <- paste0(toupper(myspecies), ", ", myvar, ", removed years: ", myremoveyears)
 
 # select combinations of stock and assessmentyear when stock definition has changed
 t <-
@@ -994,7 +994,7 @@ t3 %>%
 
 ```
 
-*Figure 6: Comparisons of stock size (SSB) in assessments where stock definitions have changed. Blue-green is old stock definition, red is new stock definition*
+*Figure 7: Comparisons of stock size (SSB) in assessments where stock definitions have changed. Blue-green is old stock definition, red is new stock definition*
 
 
   
@@ -1014,6 +1014,8 @@ t3 %>%
   
   
 ```{r, eval=TRUE, fig.align="center", fig.asp=0.7, message=FALSE, warning=FALSE, include=FALSE}
+
+# NOT SHOWN 
 
 # plot number of scale jumps (relative) over time
 
@@ -1075,13 +1077,15 @@ t %>%
 
 
 
+# *Figure 7: Number of scale jumps in stocksize for the nine stocks considered, using 5 year means and a threshold of 10%. The red line indicates the number of assessments included in the comparison (right hand y-axis)*
 
 ```
 
-*Figure 7: Number of scale jumps in stocksize for the nine stocks considered, using 5 year means and a threshold of 10%. The red line indicates the number of assessments included in the comparison (right hand y-axis)*
 
 
-```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
+```{r eval=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE, include=FALSE}
+
+# NOT SHOWN 
 
 # plot number of scale jumps by stock and decade
 
@@ -1154,7 +1158,129 @@ t %>%
 
 ```
 
-*Figure 8: Proportion of scale jumps in stocksize by stock and decade, using 5 year means and a threshold of 10%. The red line indicates the number of assessments included in the comparison (right hand y-axis)*
+
+```{r echo=FALSE, fig.align="center", fig.asp=0.4, message=FALSE, warning=FALSE}
+
+# plot number of scale jumps by decade
+
+mynyears      <- 5
+myremoveyears <- 0
+mythreshold   <- 0.1
+myvar         <- "stocksize"
+mytitle       <- paste0(myvar, ", removed years: ", myremoveyears)
+
+t <-
+  res$d.pcm %>% 
+  filter(variable        == myvar,
+         numberofyears   == mynyears,
+         removelastyears == myremoveyears,
+         threshold       == mythreshold) %>% 
+  distinct(stock, variable, assessmentyear, phi, scale_jump, 
+           removelastyears, numberofyears, threshold) %>%
+  filter(!is.na(scale_jump)) %>% 
+  mutate(decade = (10*floor(assessmentyear/10)) ) %>% 
+  # mutate(decade = paste0(decade, "s")) %>% 
+  group_by(variable, decade, scale_jump) %>% 
+  summarize(n = n()) %>% 
+  group_by(variable, decade) %>% 
+  mutate(prop = n / sum(n), 
+         nassess = sum(n)) %>% 
+  filter(scale_jump == TRUE) 
+
+p1 <-
+  ggplot(t, aes(x=reorder(decade, -decade), y=prop)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
+    # plot.background   = element_rect(fill="red"),
+    plot.margin        = unit(c(0,0,0,0.0),"cm"),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_bar(stat="identity") +
+  scale_y_continuous("Proportion scale jumps", breaks=pretty_breaks(n=4)) +
+  labs(x="") +
+  coord_flip()
+  
+p2 <-
+  t %>% 
+  ggplot(aes(x=reorder(decade, -decade), y=nassess)) +
+  theme_publication() +
+  theme(
+    panel.spacing      = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background   = element_blank(),
+    strip.text.x       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y       = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
+    axis.text.y = element_blank(), 
+    axis.ticks.y=element_blank(),
+    plot.margin        = unit(c(0,0,0,0.0),"cm"),
+    # plot.background   = element_rect(fill="blue"),
+    strip.placement    = "outside",
+    legend.position    = "none"
+  ) +
+
+  geom_path(colour="red") +
+  geom_point(colour="red") +
+  expand_limits(y=0) +
+  labs(x="") +
+  coord_flip()
+  
+
+cowplot::plot_grid(p1, 
+                   p2 , 
+                   ncol=2,
+                   scale=0.99, align="hv", 
+                   rel_widths = c(1.2,0.6))
+
+  
+
+# scaling of the two axes
+# ylim.prim <- c(0, 0.5)     # proportions
+# ylim.sec  <- c(0, 90)     # number of assessments
+
+# calculations for two axes;
+# https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+# b <- diff(ylim.prim)/diff(ylim.sec)
+# a <- b*(ylim.prim[1] - ylim.sec[1])
+
+# t %>%   
+#   ggplot(aes(x=reorder(decade, -decade), y=prop)) +
+#   theme_publication() +
+#   theme(
+#     panel.spacing    = unit(0.1, "lines"),
+#     panel.grid.major.x = element_line(colour = "gray80"),
+#     strip.background = element_blank(),
+#     strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+#     strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+#                                     angle = 180),
+#     strip.placement = "outside",
+#     legend.position  = "none"
+#   ) +
+#   
+#   geom_bar(stat="identity") +
+#   geom_line(data=t2, aes(x= reorder(decade, -decade), y = a + nassess * b), color = "red", size=1) +
+#   scale_y_continuous("Proportion scale jumps", 
+#                      sec.axis = sec_axis(~ (. - a)/b, 
+#                                          name = "N Assessments", 
+#                                          breaks=pretty_breaks(n=4))) +
+#   labs(x="") +
+#   coord_flip()
+# 
+
+
+
+
+```
+
+*Figure 6: Proportion of scale jumps in stocksize by decade, using 5 year means and a threshold of 10%. The red line indicates the number of assessments included in the comparison (right hand y-axis)*
 
 
 ```{r echo=FALSE, fig.align="center", fig.asp=0.8, message=FALSE, warning=FALSE}
@@ -1195,15 +1321,70 @@ t <-
   mutate(rank = dense_rank(desc(prop))) %>% 
   filter(nassess > 3)
 
+p1 <-
+  t %>%   
+
+  ggplot(aes(x=reorder(assessmentmodel, -rank), y=prop)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
+    # axis.text.y = element_blank(), 
+    # axis.ticks.y=element_blank(),
+    plot.margin        = unit(c(0,0,0,0.0),"cm"),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_bar(stat="identity") +
+  labs(x="") +
+  scale_y_continuous("Proportion scale jumps", breaks=pretty_breaks(n=4)) +
+  coord_flip() 
+
+
+p2 <-
+  t %>%   
+
+  ggplot(aes(x=reorder(assessmentmodel, -rank), y=nassess)) +
+  theme_publication() +
+  theme(
+    panel.spacing    = unit(0.1, "lines"),
+    panel.grid.major.x = element_line(colour = "gray80"),
+    strip.background = element_blank(),
+    strip.text.x     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm")),
+    strip.text.y     = element_text(face="bold", hjust=0, margin = margin(2,0,2,0, "mm"), 
+                                    angle = 180),
+    axis.text.y = element_blank(), 
+    axis.ticks.y=element_blank(),
+    plot.margin        = unit(c(0,0,0,0.0),"cm"),
+    strip.placement = "outside",
+    legend.position  = "none"
+  ) +
+  
+  geom_point(colour="red") +
+  geom_line(colour="red") +
+  labs(x="") +
+  scale_y_continuous("N assessments", breaks=pretty_breaks(n=4)) +
+  coord_flip() 
+
+cowplot::plot_grid(p1, 
+                   p2 , 
+                   ncol=2,
+                   scale=0.99, align="hv", 
+                   rel_widths = c(1.2,0.6))
 
 # scaling of the two axes
-ylim.prim <- c(0, 100)   # number of assessments  
-ylim.sec  <- c(0, 1)     # proportions
+# ylim.prim <- c(0, 100)   # number of assessments  
+# ylim.sec  <- c(0, 1)     # proportions
 
 # calculations for two axes;
 # https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
-b <- diff(ylim.prim)/diff(ylim.sec)
-a <- b*(ylim.prim[1] - ylim.sec[1])
+# b <- diff(ylim.prim)/diff(ylim.sec)
+# a <- b*(ylim.prim[1] - ylim.sec[1])
 
 t %>%   
   # filter(scale_jump == TRUE) %>% 
