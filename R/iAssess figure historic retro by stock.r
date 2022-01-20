@@ -17,7 +17,7 @@ library(directlabels)  # for printing labels at end of geom lines
 library(scales)
 
 # Load utils code
-source("../mptools/r/my_utils.r")
+source("../mptools/r/my utils.r")
 
 # Set dropbox folder
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -34,6 +34,7 @@ load(file=paste(dropboxdir,"/rdata/iSAGrefpoints.RData", sep=""))
 # ---------------------------------------------------------------------------------------------
 # Historic retros: plot stock data over different assessment years 
 # ---------------------------------------------------------------------------------------------
+# distinct(iAssess, purpose)
 
 d <-
   iAssess %>% 
@@ -48,9 +49,9 @@ d <-
   #        purpose %in% c("advice","interbenchmark","withdrawn"),
   #        assessmentyear>=2016) %>%
   
-  # filter(grepl("hom-west", stockkeylabelold),purpose %in% c("update","bench"),assessmentyear>=2016) %>% 
+  # filter(grepl("hom-west", stockkeylabelold),purpose %in% c("advice","benchmark"),assessmentyear>=2016) %>%
   # filter(grepl("ple-nsea", stockkeylabelold) ) %>% 
-  # filter(grepl("cod-347d", stockkeylabelold) ) %>% 
+  filter(grepl("cod-347d", stockkeylabelold) ) %>% 
   
   # filter(grepl("spr-nsea", stockkeylabelold) | grepl("spr.27.3a4", stockkeylabelnew) ) %>%
   # mutate(stockkeylabelold = "spr.27.3a4") %>%
@@ -61,18 +62,26 @@ d <-
   # filter(grepl("her-67bc", stockkeylabelold) ) %>% 
   # filter(grepl("her-4", stockkeylabelold) ) %>%
   # filter(grepl("her-nirs", stockkeylabelold) ) %>% 
-  # filter(stockkeylabelold == "hom-west") %>%
   # filter(grepl("hom-west", stockkeylabelold) ) %>%
+  
+  # filter(stockkeylabelold == "hom-west") %>%
+  # filter(purpose %in% c("advice", "benchmark")) %>% 
+  # filter(assessmentyear <= 2018) %>% 
+  
+  # filter(stockkeylabelold == "sol-nsea") %>%
+  # filter(purpose %in% c("advice", "benchmark")) %>% 
+  # filter(assessmentyear >= 2010) %>% 
+  
   # filter(grepl("whb-comb", stockkeylabelold) ) %>%
-  filter(grepl("mac-nea", stockkeylabelold) ) %>%
+  # filter(grepl("mac-nea", stockkeylabelold) ) %>%
 
   # filter(grepl("mac-nea|hom-west|whb-comb|her-noss", stockkeylabelold) ) %>% 
   # filter(grepl("whb", stockkeylabelold) ) %>% 
   # filter(grepl("noss", stockkeylabelold) ) %>% 
   
   ungroup() %>% 
-  filter(year             >=   1980) %>% 
-  # filter(year             >  2000) %>%  
+  # filter(year             >=   1980) %>% 
+  filter(year             >=  2000) %>%  
   # filter(year             <= assessmentyear) %>% 
   filter(assessmentyear   >  2000) %>% 
   # filter(assessmentyear   >  2014) %>% 
@@ -157,10 +166,11 @@ rp <-
 #          fishingpressure           = fishingpressure / lastfishingpressure)
 
 # plot stocksize
-p1 <-
+# p1 <-
   d %>% 
   filter(!is.na(stocksize)) %>%  
   filter(stocksizeunits == "tonnes") %>% 
+  
   # filter(grepl("2016", tyear)) %>% 
   # filter(purpose == "withdrawn") %>% 
   # View()
@@ -177,7 +187,7 @@ p1 <-
         legend.position = "null") +
   
   # geom_ribbon(aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
-  # geom_ribbon(data=last, aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
+  geom_ribbon(data=last, aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   # geom_ribbon(data=withdrawn, aes(x=year, ymin=lowstocksize, ymax=highstocksize, fill = purpose), alpha=0.3, inherit.aes = FALSE) +
   
   geom_line(aes(colour = purpose, size=purpose) ) +

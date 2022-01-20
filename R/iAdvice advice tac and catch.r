@@ -14,7 +14,7 @@ library(directlabels)  # for printing labels at end of geom lines
 library(scales)
 
 # Source the utils file
-source("../mptools/R/my_utils.r")
+source("../prf/R/my utils.r")
 
 # set dropboxdirs
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -25,19 +25,28 @@ load(file=paste(dropboxdir, "/rdata/iRename.RData", sep=""))
 
 load(file=paste(dropboxdir, "/rdata/iAdvice.RData", sep=""))
 
+compare <-
+  iAdvice %>% 
+  filter(adviceonstock == TRUE) %>% 
+  dplyr::select(year=tacyear, stockkeylabelold, stockarea, advisedlandingsmax, tal, tac, landings, catches) %>% 
+  rename(advice=advisedlandingsmax) %>% 
+  group_by(year, stockkeylabelold, stockarea) %>% 
+  filter(n() == 1) %>% 
+  # filter(stockkeylabelold %in% c("her-47d3")) %>% 
+  # filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
+  # filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
+  filter(year >= 2000) %>% 
+  gather(key=variable, value=value, advice:catches) 
+
+# compare %>% filter(stockkeylabelold=="ane-bisc", year==2014) %>% View()
+# compare %>% filter(stockkeylabelold=="ane-bisc") %>% group_by(year, stockkeylabelold, stockarea, variable) %>% summarise(n=n()) %>% filter(n>1)
+
+
+
 # ---------------------------------------------------------------------------
 # overview of %change in reference points
 # ---------------------------------------------------------------------------
 
-compare <-
-  iAdvice %>% 
-  dplyr::select(year=tacyear, stockkeylabelold, advisedlandingsmax, tal, landings, catches) %>% 
-  rename(advice=advisedlandingsmax, tac = tal) %>% 
-  filter(stockkeylabelold %in% c("her-47d3")) %>% 
-  # filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
-  # filter(stockkeylabelold %in% c("her-47d3", "mac-nea","whb-comb", "her-noss")) %>% 
-  filter(year >= 2000) %>% 
-  gather(key=variable, value=value, advice:catches)
 
 # plot of comparison of advice, tac, landings and catch
 compare %>% 
@@ -57,9 +66,10 @@ compare %>%
   facet_wrap(~stockkeylabelold, scales="free_y") 
 
 # plot of difference between tac and advice
-compare %>% 
+t <-
+  compare %>% 
   filter(variable %in% c("advice","tac")) %>% 
-  spread(key=variable, value=value) %>% 
+  pivot_wider(names_from=variable, values_from=value) %>% 
   mutate(deviance = as.integer(100*(tac/advice-1)) ) %>% 
   filter(!is.na(deviance)) %>% 
 
@@ -68,6 +78,9 @@ compare %>%
   geom_hline(aes(yintercept=0), colour="black") +
   geom_line(colour="blue", size=1.5) +
   facet_wrap(~stockkeylabelold) 
+
+
+glimpse(t)
 
 # plot of difference between catch and advice
 compare %>% 
