@@ -1,0 +1,196 @@
+---
+output:
+  powerpoint_presentation:
+    reference_doc: ../powerpoint_template.pptx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# ---
+# output:
+#   powerpoint_presentation:
+#     reference_doc: ../powerpoint_template.pptx
+# ---
+
+# -----------------------------------------------------------------------------------------------
+# Presentation for pelagic forum 2019.Rmd
+#
+# 06/07/2018 first coding
+# 14/12/2018 updated for the new database structure
+# 01/06/2019 updated for herring advice round
+# 29/09/2019 adapted from stock summary code
+# 03/10/2019 converted to powerpoint presentation
+# -----------------------------------------------------------------------------------------------
+
+if (packageVersion("rmarkdown") <= "1.9") {
+  install.packages("rmarkdown")  # update rmarkdown from CRAN
+}
+
+rmarkdown::pandoc_version()
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+library(tidyverse)
+library(cowplot)
+library(directlabels)  # for printing labels at end of geom lines
+library(scales)
+library(stringr)
+library(readxl)
+library(gridExtra)                   # for plotting table as image (bio data)
+library(RColorBrewer)
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+source("iPlot_utils.r")
+
+# Set dropbox folder
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# load the data
+iSpecies <-
+  get(load(file=paste(dropboxdir,"/rdata/iSpecies.RData", sep=""))) %>% 
+  ungroup() %>% 
+  dplyr::select(speciesfaocode, trophicguild, fisheriesguild, sizeguild) 
+
+iAssess <-
+  get(load(file=paste(dropboxdir,"/rdata/iAssess.RData", sep=""))) %>% 
+  left_join(iSpecies, by="speciesfaocode")
+
+load(file=paste(dropboxdir,"/rdata/iAdvice.RData", sep=""))
+load(file=paste(dropboxdir,"/rdata/iRename.RData", sep=""))
+load(file=paste(dropboxdir,"/rdata/iStockkey.RData", sep=""))
+
+# add intermediate and forecast data
+forecasts <-
+  read_excel(path=paste(dropboxdir,"/excel/Pelagic forecasts 2019.xlsx", sep=""), col_names = TRUE) %>%
+  left_join(iStockkey, by="stockkeylabelold") %>%
+  mutate(stockkeylabel = stockkeylabelnew) %>%
+  left_join(iRename,   by=c("stockkey", "stockkeylabel")) %>%
+  left_join(iSpecies,  by="speciesfaocode") %>%
+  mutate(catcheslandingsunits = "tonnes")
+  
+
+# t <-
+#   icesSAGfull %>%
+#   filter(year < assessmentyear) %>% 
+#   bind_rows(forecasts) 
+
+fay <- 2011
+fy  <- 1990
+lay <- 2019
+ly  <- 2019
+
+
+```
+
+
+# In the morning
+
+## Catches by fisheries guild
+
+```{r, echo=FALSE, fig.asp=0.5, fig.align="center", message=FALSE, warning=FALSE}
+
+# catches by fisheriesguild
+
+d <-
+  iAssess %>% 
+  ungroup() %>% 
+  # filter(assessmentyear      == lay | (assessmentyear == 2017 & stockkeylabelold == "cap-icel") ) %>% 
+  filter(assessmentyear      == lay  ) %>% 
+  # filter(catcheslandingsunits == "tonnes") %>% 
+  filter(year >= fy, year < ly) %>% 
+  filter(purpose %in% c("advice")) %>% 
+
+  mutate(catches = ifelse(is.na(catches) | catches == 0, landings, catches))  %>% 
+  mutate(fisheriesguild = ifelse(fisheriesguild %in% c("pelagic","demersal"), fisheriesguild, "other"))  %>% 
+  mutate(fisheriesguild = factor(fisheriesguild, levels=c("pelagic","demersal","other"))) %>% 
+
+  group_by(fisheriesguild, speciesfaocode, year) %>% 
+  summarize(catches  = sum(catches, na.rm=TRUE),
+            landings = sum(landings, na.rm=TRUE)) %>% 
+
+  group_by(fisheriesguild, year) %>% 
+  summarize(catches  = sum(catches, na.rm=TRUE),
+            landings = sum(landings, na.rm=TRUE)) %>% 
+  group_by(year) %>% 
+  mutate(perc = round(100 * catches/ sum(catches), digits=2)) %>% 
+  arrange(catches) %>% 
+  mutate(fisheriesguild = factor(fisheriesguild, fisheriesguild))
+
+# d %>% filter(year == 2018) %>% arrange(-catches) %>% View()
+
+
+d2 <-
+  d %>% 
+  group_by(fisheriesguild) %>% 
+  summarize(perc = mean(perc),
+            catches=mean(catches),
+            year = mean(year)) %>% 
+  ungroup() %>% 
+  mutate(cumcatches=cumsum(catches))
+
+
+# plot stacked catches: pelagic, demersal and other
+p1 <-
+  d %>% 
+  
+  ggplot(aes(year,catches)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  geom_bar(aes(fill=(fisheriesguild)), stat="identity", position="stack", colour="black") +
+  # geom_text(data=subset(d, year==ly-1), aes(label=round(perc,0), group=fisheriesguild), 
+  #           position = position_stack(vjust = 0.5), colour="white") +
+  geom_text(data=subset(d, year==ly-1), 
+            aes(label=fisheriesguild, group=fisheriesguild, x=ly), 
+            position = position_stack(vjust = 0.5), colour="black", hjust=0) +
+  # geom_dl(aes(label= perc),
+  #         position = position_stack(vjust = 0.5),
+  #         method   = list(dl.trans(x=x+0.9), dl.combine("last.points"),
+  #                         fontface = 'bold',cex=.9, hjust = 0)) +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x="",y="tonnes",title="catches") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly+3)) 
+
+# d %>% filter(year == 2018) %>% View()
+
+# plot of filled relative catches (how to add the direct labels?)
+p2 <-
+  d %>% 
+  ggplot(aes(year,perc)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  theme(plot.margin = unit(c(0,0,0,0), "cm")) +
+  theme(plot.background = element_blank()) +
+  theme(axis.text = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  geom_bar(aes(fill=fisheriesguild), stat="identity", position="stack", colour="black") +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x="",y="",title="") +
+  # scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly)) 
+
+vp <- grid::viewport(width = 0.3, height = 0.3, 
+                     x = 0.15, y = 0.12, 
+                     just = c("left", "bottom"))
+
+ print(p1)
+     theme_set(theme_bw(base_size = 8))
+     # theme_white()
+     print(p2, vp = vp)
+     theme_set(theme_bw())
+
+  # cowplot::plot_grid(p1, p2,
+  #                ncol=2, scale=c(1.0, 0.25), align="hv",
+  #                rel_widths = c(1.0, 1.0), rel_heights = c(1.0, 1.0))
+
+```
+
+
+## More information
+
+Please refer to the [ICES website](http://www.ices.dk/community/advisory-process/Pages/Latest-advice.aspx) for an overview of all advice documents. 

@@ -1,0 +1,719 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# Plots for pelagic forum 2019.Rmd
+#
+# 06/07/2018 first coding
+# 14/12/2018 updated for the new database structure
+# 01/06/2019 updated for herring advice round
+# 29/09/2019 adapted from stock summary code
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+library(tidyverse)
+library(cowplot)
+library(directlabels)  # for printing labels at end of geom lines
+library(scales)
+library(stringr)
+library(readxl)
+library(gridExtra)                   # for plotting table as image (bio data)
+library(RColorBrewer)
+
+# Load utils code
+source("../../mptools/r/my_utils.r")
+source("iPlot_utils.r")
+
+# Set dropbox folder
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# load the data
+iSpecies <-
+  get(load(file=paste(dropboxdir,"/rdata/iSpecies.RData", sep=""))) %>% 
+  ungroup() %>% 
+  dplyr::select(speciesfaocode, trophicguild, fisheriesguild, sizeguild) 
+
+iAssess <-
+  get(load(file=paste(dropboxdir,"/rdata/iAssess.RData", sep=""))) %>% 
+  left_join(iSpecies, by="speciesfaocode")
+
+load(file=paste(dropboxdir,"/rdata/iAdvice.RData", sep=""))
+load(file=paste(dropboxdir,"/rdata/iRename.RData", sep=""))
+load(file=paste(dropboxdir,"/rdata/iStockkey.RData", sep=""))
+
+# add intermediate and forecast data
+forecasts <-
+  read_excel(path=paste(dropboxdir,"/excel/Pelagic forecasts 2019.xlsx", sep=""), col_names = TRUE) %>%
+  left_join(iStockkey, by="stockkeylabelold") %>%
+  mutate(stockkeylabel = stockkeylabelnew) %>%
+  left_join(iRename,   by=c("stockkey", "stockkeylabel")) %>%
+  left_join(iSpecies,  by="speciesfaocode") %>%
+  mutate(catcheslandingsunits = "tonnes")
+  
+
+# t <-
+#   icesSAGfull %>%
+#   filter(year < assessmentyear) %>% 
+#   bind_rows(forecasts) 
+
+fay <- 2011
+fy  <- 1990
+lay <- 2019
+ly  <- 2019
+
+
+```
+
+
+**Status of pelagic stocks in the Northeast Atlantic**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+<!--Section 1: introduction ------------------------------------------------------------------- -->
+
+# Introduction
+
+In this document an overview is presented of the ICES assessment and advice for pelagic stocks in the Northeast Atlantic. The overviews are based on two databases that have been developed as part of a more comprehensive research effort into the role of fisheries advice in European decision-making: one database containing the history of stock assessments and one database containing the history of scientific advice and management decisions.
+
+<!--Section 2: general trends ------------------------------------------------ -->
+
+# General trends
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+# catches by fisheriesguild
+
+d <-
+  iAssess %>% 
+  ungroup() %>% 
+  # filter(assessmentyear      == lay | (assessmentyear == 2017 & stockkeylabelold == "cap-icel") ) %>% 
+  filter(assessmentyear      == lay  ) %>% 
+  # filter(catcheslandingsunits == "tonnes") %>% 
+  filter(year >= fy, year < ly) %>% 
+  filter(purpose %in% c("advice")) %>% 
+
+  mutate(catches = ifelse(is.na(catches) | catches == 0, landings, catches))  %>% 
+  mutate(fisheriesguild = ifelse(fisheriesguild %in% c("pelagic","demersal"), fisheriesguild, "other"))  %>% 
+  mutate(fisheriesguild = factor(fisheriesguild, levels=c("pelagic","demersal","other"))) %>% 
+
+  group_by(fisheriesguild, speciesfaocode, year) %>% 
+  summarize(catches  = sum(catches, na.rm=TRUE),
+            landings = sum(landings, na.rm=TRUE)) %>% 
+
+  group_by(fisheriesguild, year) %>% 
+  summarize(catches  = sum(catches, na.rm=TRUE),
+            landings = sum(landings, na.rm=TRUE)) %>% 
+  group_by(year) %>% 
+  mutate(perc = round(100 * catches/ sum(catches), digits=2)) %>% 
+  arrange(catches) %>% 
+  mutate(fisheriesguild = factor(fisheriesguild, fisheriesguild))
+
+# d %>% filter(year == 2018) %>% arrange(-catches) %>% View()
+
+
+d2 <-
+  d %>% 
+  group_by(fisheriesguild) %>% 
+  summarize(perc = mean(perc),
+            catches=mean(catches),
+            year = mean(year)) %>% 
+  ungroup() %>% 
+  mutate(cumcatches=cumsum(catches))
+
+
+# plot stacked catches: pelagic, demersal and other
+p1 <-
+  d %>% 
+  
+  ggplot(aes(year,catches)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  geom_bar(aes(fill=(fisheriesguild)), stat="identity", position="stack", colour="black") +
+  # geom_text(data=subset(d, year==ly-1), aes(label=round(perc,0), group=fisheriesguild), 
+  #           position = position_stack(vjust = 0.5), colour="white") +
+  geom_text(data=subset(d, year==ly-1), 
+            aes(label=fisheriesguild, group=fisheriesguild, x=ly), 
+            position = position_stack(vjust = 0.5), colour="black", hjust=0) +
+  # geom_dl(aes(label= perc),
+  #         position = position_stack(vjust = 0.5),
+  #         method   = list(dl.trans(x=x+0.9), dl.combine("last.points"),
+  #                         fontface = 'bold',cex=.9, hjust = 0)) +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x="",y="tonnes",title="catches") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly+3)) 
+
+# d %>% filter(year == 2018) %>% View()
+
+# plot of filled relative catches (how to add the direct labels?)
+p2 <-
+  d %>% 
+  ggplot(aes(year,perc)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  theme(plot.margin = unit(c(0,0,0,0), "cm")) +
+  theme(plot.background = element_blank()) +
+  theme(axis.text = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  geom_bar(aes(fill=fisheriesguild), stat="identity", position="stack", colour="black") +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x="",y="",title="") +
+  # scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly)) 
+
+vp <- grid::viewport(width = 0.3, height = 0.3, 
+                     x = 0.15, y = 0.12, 
+                     just = c("left", "bottom"))
+
+ print(p1)
+     theme_set(theme_bw(base_size = 8))
+     # theme_white()
+     print(p2, vp = vp)
+     theme_set(theme_bw())
+
+  # cowplot::plot_grid(p1, p2,
+  #                ncol=2, scale=c(1.0, 0.25), align="hv",
+  #                rel_widths = c(1.0, 1.0), rel_heights = c(1.0, 1.0))
+
+```
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+# catches of pelagic species
+
+d <-
+  iAssess %>% 
+  ungroup() %>% 
+  filter(year >= fy, year < ly) %>% 
+  filter(purpose %in% c("advice")) %>% 
+  filter(fisheriesguild == "pelagic") %>%
+  filter(assessmentyear == lay ) %>%
+  
+  mutate(speciesfaocode = ifelse(speciesfaocode %in% c("mac","whb","her", "hom", "pil","spr", "cap"), 
+                                 speciesfaocode, "other")) %>% 
+
+  # filter(speciesfaocode=="ane") %>% View()
+  # filter((speciesfaocode == "ane.27.8" & assessmentyear == lay-1) | 
+  #        (speciesfaocode != "ane.27.8") & assessmentyear == lay ) %>% 
+  
+  mutate(
+    catches = ifelse(!is.na(catches), catches, landings) ) %>% 
+  dplyr::select(-landings) %>% 
+  group_by(speciesfaocode, year) %>% 
+  summarize(
+    catches  = sum(catches, na.rm=TRUE)) %>% 
+  group_by(speciesfaocode) %>% 
+  mutate(
+    totalcatches = sum(catches, na.rm=TRUE) ) %>%
+  filter(totalcatches > 0) %>% 
+  group_by(year) %>% 
+  mutate(
+    perc = round(100 * catches/ sum(catches), digits=2) ) %>% 
+  arrange(catches) %>% 
+  mutate(speciesfaocode = factor(speciesfaocode, speciesfaocode))
+
+# d %>% filter(speciesfaocode=="ane.27.8") %>%  View()
+# d %>% filter(year == 2018) %>% View()
+
+
+d2 <-
+  d %>% 
+  group_by(speciesfaocode) %>% 
+  summarize(perc = mean(perc),
+            catches=mean(catches),
+            year = mean(year)) %>% 
+  ungroup() %>% 
+  mutate(cumcatches=cumsum(catches))
+
+
+# plot stacked catches: pelagic, demersal and other
+p1 <-
+  d %>% 
+  
+  ggplot(aes(year,catches)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  geom_bar(aes(fill=(speciesfaocode)), stat="identity", position="stack", colour="black") +
+  geom_text(data=subset(d, year==ly-1), 
+            aes(x = year+0.7,label=speciesfaocode, group=speciesfaocode, colour=speciesfaocode ), 
+            position = position_stack(vjust = 0.5), hjust=0) +
+  # geom_dl(aes(label= perc),
+  #         position = position_stack(vjust = 0.5),
+  #         method   = list(dl.trans(x=x+0.9), dl.combine("last.points"),
+  #                         fontface = 'bold',cex=.9, hjust = 0)) +
+  scale_fill_brewer(palette = "Paired") +
+  scale_colour_brewer(palette = "Paired") +
+  labs(x="",y="tonnes",title="catches by species") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly+1)) 
+
+d %>% filter(year==2018) %>% ungroup() %>% summarize(catches=sum(catches))
+
+# plot of filled relative catches (how to add the direct labels?)
+p2 <-
+  d %>% 
+  ggplot(aes(year,perc)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  theme(plot.margin = unit(c(0,0,0,0), "cm")) +
+  theme(plot.background = element_blank()) +
+  theme(axis.text = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  geom_bar(aes(fill=speciesfaocode), stat="identity", position="stack", colour="black") +
+  scale_fill_brewer(palette = "Paired") +
+  labs(x="",y="",title="") +
+  # scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly)) 
+
+vp <- grid::viewport(width = 0.3, height = 0.3, 
+                     x = 0.15, y = 0.12, 
+                     just = c("left", "bottom"))
+
+ print(p1)
+     theme_set(theme_bw(base_size = 8))
+     # theme_white()
+     print(p2, vp = vp)
+     theme_set(theme_bw())
+
+  # cowplot::plot_grid(p1, p2,
+  #                ncol=2, scale=c(1.0, 0.25), align="hv",
+  #                rel_widths = c(1.0, 1.0), rel_heights = c(1.0, 1.0))
+
+```
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+# catches and advice for key pelagic species
+d <-
+  iAssess %>%
+  filter(year < ly) %>% 
+  bind_rows(forecasts) %>% 
+  filter(stockkeylabelold %in% c("her-47d3","her-noss","mac-nea","whb-comb")) %>% 
+  filter(assessmentyear == lay ) %>%
+  filter(year >= fy, year <= ly+1) %>% 
+  filter(purpose %in% c("advice")) %>% 
+  
+  mutate(
+    catches = ifelse(!is.na(catches), catches, landings) ) %>% 
+  dplyr::select(-landings) %>% 
+  group_by(stockkeylabelold, year) %>% 
+  summarize(
+    catches  = sum(catches, na.rm=TRUE)) %>% 
+  group_by(stockkeylabelold) %>% 
+  mutate(
+    totalcatches = sum(catches, na.rm=TRUE) ) %>%
+  filter(totalcatches > 0) %>% 
+  group_by(year) %>% 
+  mutate(
+    perc = round(100 * catches/ sum(catches), digits=2) ) %>% 
+  arrange(catches) %>% 
+  mutate(stockkeylabel = factor(stockkeylabelold, stockkeylabelold)) %>% 
+  arrange(stockkeylabel, year)
+
+
+# plot stacked catches: pelagic, demersal and other
+d %>% 
+  ggplot(aes(year,catches)) +
+  theme_publication() +
+  theme(legend.position="none") +
+  geom_bar(aes(fill=(stockkeylabelold)), stat="identity", position="stack", colour="black") +
+  geom_text(data=subset(d, year==ly+1), 
+            aes(x = year+0.7,label=stockkeylabelold, group=stockkeylabelold, colour=stockkeylabelold ), 
+            position = position_stack(vjust = 0.5), hjust=0) +
+  scale_fill_brewer(palette = "Paired") +
+  scale_colour_brewer(palette = "Paired") +
+  labs(x="",y="tonnes",title="catches by key pelagic species") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(limits=c(fy,ly+5)) 
+
+# d %>% 
+#   arrange(stockkeylabelold, year) %>% 
+#   filter(year >= 2019) %>% 
+#   group_by(year) %>% 
+#   summarize(catches=sum(catches)) %>% 
+#   View()
+
+
+```
+
+<!--Section 3: overviews by stock ------------------------------------------------ -->
+
+# Overviews by stock
+
+## North Sea herring
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "her-47d3"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               
+             plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
+```
+
+The assessment of North Sea herring was benchmarked in February 2018. There have been some revisions in the model and in the data that is being used for North Sea herring. Most important it the way of handling natural mortality estimates. This is one of the few assessments where natural mortality is derived from the multispecies model of the North Sea. This multispecies model is rerun every three years leading  to new estimates of natural mortality for the whole time-series. Because of changes in the multispecies model and in the underlying data for predator species (e.g. hake, cod, saithe), the natural mortality estimates of herring have been revised upwards and downwards several times. This then also leads to rescaling of the estimates of stock size and fishing mortality. During the benchmark, a new method to standardize natural mortality estimates has been introduced which would hopefully circumvent re-scaling in the future?). 
+
+Last year, the combination of low recruitment, fishing harder than recommended and a lower Fmsy, lead to a substantially lower advice for 2019 (291 000 tonnes). This year, the assessments estimates - overall - a somewhat higher stock size compared to the estimate in 2018. This is due to the 2018 herring acoustic survey, although the exact reason is not well understood. The advice for 2020 is higher than the advice that was given for 2019, despite that recruitment remains low and that the overall stock biomass is declining. The reason the advice is higher is because the catch forecast takes into account al the ages and weights of fish the make up the fishery. This is called the selectivity pattern. The fishery is heavily dependent on the abundance of the last strong year class (2013), which will be 7 year olds next year.  The TAC advice uses only F on ages 2-6 years old, and this, together with the abundance and higher weight of 7 year olds is what is leading to a higher TAC for 2020. 
+
+[her.27.3a47d.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.3a47d.pdf)
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Atlanto-scandian herring
+
+# s   <- "her-noss"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# A new long-term management strategy for Atlanto-scandian herring has been evaluated and agreed. Fmsy and the fishing mortality target are now higher than the previous values being used. The advice for 2019 is based on following the new management plan, with a TAC of around 590 000 tonnes (compared to an advice of 384 000 tonnes that was advised for 2018). 
+# 
+# The stock assessment is consistent with last year's assessment. The stock appears to be slowly declining. Fishing mortality has risen sharply in the last year (due to the erroneous advice in 2016). There are signs of a reasonable sized incoming year class. The reason that the advice is substantially higher than last year is due to the new management plan that has a higher target fishing mortality. Last year, the advice was based on a target fishing mortality of 0.086, this year it is based on 0.14. 
+# 
+# [her.27.1-24a514a.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.1-24a514a.pdf)
+
+```
+
+
+## Northeast Atlantic Mackerel
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "mac-nea"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE, 
+             plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
+# [mac.27.nea.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/mac.27.nea.pdf)
+
+```
+
+The ICES advice on Northeast Atlantic mackerel that was released in October 2018 has been received with a lot of scepticism and unbelief. According to that advice, the stock had been declining since 2011 and was estimated to be just below the MSY Btrigger. At the time, it was already found that the model results were very sensitive to the inclusion of the RFID tags. Leaving out only the RFID tags, gave a much higher stock estimate. 
+
+To deal with this assessment problem, an inter-benchmark has been set up which is lead to a new assessment configuration in March 2019 and an updated advice for 2019 in May 2019. The new assessment configuration uses a more limited tagging dataset (restricted in ages, years and years out at sea) and a different way of estimating recruitment in the model. This lead to a substantially higher stock estimate and a substantial revision of the advice for 2019.  
+
+[mac.27.nea.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/special_requests/no.2019.09.pdf)
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Western horse mackerel
+
+# s   <- "hom-west"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# The stock assessment of Western horse mackerel is comparable to last year but there has been another revision upwards of the stock.  This is especially relevant in conjunction with the biomass reference points that have been set after the benchmark in 2017 and where the biomass in 2015 (the last year in the time series) was selected as Blim. Because of the upward revisions in the assessments of last year and this year, the stock is now well above the absolute Blim and in fact close to MSY Btrigger even though the stock is at the lowest point in the time-series! Fishing mortality is estimated to be well below the Fmsy. The advice for 2019 is 145 000 tonnes, which is 24% higher than the advice for 2018. The increase in the advice is because the stock size has been revised upwards and because the recent catches have been taken with a fishing mortality which was lower than Fmsy. The advice is based on the application of Fmsy.   
+# 
+# The assessment of western horse mackerel is very uncertain and there has been frequent re-scaling of the assessment during every new assessment. This re-scaling is still happening. For western horse mackerel this results in the overall stock to be estimated higher than the year before. That is why the stock is now estimated to be close to MSY Btrigger while the stock is at the same time around the lowest point in the time series. The resulting advice is a direct application of the ICES advice rule to an assessment that could very well be too optimistic.
+#  
+# [hom.27.2a4a5b6a7a-ce-k8.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hom.27.2a4a5b6a7a-ce-k8.pdf)
+
+```
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Blue whiting
+
+# s   <- "whb-comb"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# The stock size of blue whiting was high in 2018 but is predicted to be substantially lower in 2019 due to low recruitments coming in. The stock size of blue whiting appears to have been overestimated. Catches have been well above 1 Million tonnes over the last few years and above the scientific advice. Fishing mortality is estimated to be above Fmsy. The advice for 2019 is 1 144 000 tonnes, which is 18% lower than the advice for 2018.  
+# 
+# The blue whiting survey went well in 2018 and showed the highest biomass of the time series. Despite the high catches, the stock is still at a very high level although a decline does appear to have started. The most recent year classes of blue whiting are very weak so that decline in catching opportunities in the further years is foreseen. 
+# 
+# [whb.27.1-91214.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/whb.27.1-91214.pdf)
+
+```
+
+
+
+## Western Baltic Spring Spawning herring
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+s   <- "her-3a22"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
+```
+
+Assessment was benchmarked in 2018 when reference points were also re-estimated. Redefinition of Blim from 90 kT to 120 kT which lead to stock having been below Blim for a number of years already. No possibility of rebuilding stock to Blim within one year (which is the unwritten new ICES rule), and therefore a zero catch advice. 
+
+The new assessment has estimated the stock to be lower compared to the assessment of last year. This lead to a repeat of the zeor advice. 
+
+[her.27.20-24.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.20-24.pdf)
+
+
+## Baltic Sea herring
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "her-2532-gor"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               
+             plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+
+```
+
+Assessment largely consistent with last year's assessment. The 2014 year class is estimated to be strong.  
+
+[her.27.25-2932.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.25-2932.pdf)
+
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Herring in 6a and 7bc
+
+# s   <- "her-67bc"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
+# 
+# The advice for a zero TAC is the same as in the previous years. Unfortunately ICES has not presented advice on the proposed rebuilding plan that has been developed by the PELAC and that has been submitted for review to ICES and that had been evaluated by the herring working group in March 2018. In previous years the monitoring TAC for herring in 6a and 7bc had been suggested by ICES as a means to maintain the knowledge base for this herring stock. The monitoring TAC is still mentioned under issues relevant for the advice. 
+# 
+# [her.27.6a7bc.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.6a7bc.pdf)
+
+```
+
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Herring in the Irish Sea
+
+# s   <- "her-nirs"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock was benchmarked in 2017. SSB is well above MSY Btrigger and fishing mortality well below Fmsy. Potential mixing of herring in the Irish Sea and the Celtic Sea. 
+# 
+# [her.27.nirs.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.nirs.pdf)
+
+```
+
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Herring in the Celtic Sea
+
+# s   <- "her-irls"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock went through interbenchmark in 2018 however perception of the stock trends is very similar to last year. Evaluations conducted in 2018 showed that the agreed management strategy is no longer precautionary. Therefore the advice is according to the MSY approach. 
+# 
+# [her.27.irls.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.irls.pdf)
+
+```
+
+
+## Sprat in the North Sea
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- c("spr-nsea", "spr.27.3a4")
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
+```
+
+Assessment was benchmarked in 2019, leading to a combination of sprat in 4 and sprat in 3a into a single stock. Some changes to the model al well, leading to a different perception of the history of the stock and lower stocksize in recent years. 
+
+[spr.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/spr.27.4.pdf)
+
+
+
+## Sprat in the Baltic Sea
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "spr-2232"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
+```
+
+Advice according to the Baltic Multiannual Plan (MAP). 
+
+[spr.27.22-32.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/spr.27.22-32.pdf)
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Greater argentine in 5b and 6a
+
+# s   <- "arg-5b6a"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Latest advice was from 2017, applicable for two years. Next advice foreseen in 2019. 
+# 
+# [aru.27.5b6a.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2017/2017/aru.27.5b6a.pdf)
+
+```
+
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Northern Hake
+
+# s   <- "hke-nrtn"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock size is well above MSY Btrigger and fishing mortality is below Fmsy. In the past, there has been a tendency to underestimate SSB and overestimate F but this is not the case in the most recent years. 
+# 
+# [hke.27.3a46-8abd.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hke.27.3a46-8abd.pdf)
+
+```
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## North Sea cod
+
+# s   <- "cod-347d"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# The 2018 assessment gave substantially lower estimates of SSB and higher estimates of fishing mortality in recent years. According to the advice document, this is (partially) caused by a lower than expected survey index for the strong 2013 and 2016 year classes in IBTS quarter 1 survey and the IBTS quarter 3 survey. The 2017 SSB is 32% lower compared to the estimate that was presented last year. This also leads to a substantially lower advice for 2019 compared to the advice for 2018. 
+# 
+# [cod.27.47d20.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/cod.27.47d20.pdf)
+
+```
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## North Sea plaice
+
+# s   <- "ple-nsea"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock size is well above MSY Btrigger (and close to 1 million tonnes) and fishing mortality is around Fmsy. An EU multiannual management plan (MAP) has been proposed for this stock (EU, 2016). This plan is not adopted by Norway, thus, not used as the basis of the advice for this shared stock. The advice is based on the MSY approach. 
+# 
+# [ple.27.420.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/ple.27.420.pdf)
+
+```
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## North Sea sole
+
+# s   <- "sol-nsea"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# Stock size above MSY Btrigger, fishing mortality around Fmsy. Advice according to the EU multiannual plan (MAP) for the North Sea. 
+# 
+# [sol.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/sol.27.4.pdf)
+
+```
+
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+## Atlantic Seabass
+
+# s   <- "bss-47"
+# 
+# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+# 
+# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
+# 
+# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+# 
+# ICES has reissued the advice for 2018 and issued an advice for 2019. ICES was requested by the EU to provide updated advice on fishing opportunities for 2018 because a benchmark of the assessment had been conducted in early 2018. The 2018 benchmark has not changed the perception of the current SSB (B below Blim). However, given the current low fishing mortality and the above-average recruitment in 2013 and 2014, SSB in 2019 and 2020 is predicted to be above Blim, allowing for some catches in 2018 and 2019. 
+# 
+# [bss.27.4bc7ad-h.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/bss.27.4bc7ad-h.pdf)
+
+```
+
+
+# More information
+
+Please refer to the [ICES website](http://www.ices.dk/community/advisory-process/Pages/Latest-advice.aspx) for an overview of all advice documents. 
