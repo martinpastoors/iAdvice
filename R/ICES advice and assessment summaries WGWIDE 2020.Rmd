@@ -1,0 +1,340 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# ICES advice and assessment summaries.Rmd
+#
+# 06/07/2018 first coding
+# 14/12/2018 updated for the new database structure
+# 01/06/2019 updated for herring advice round
+# 03/09/2019 updated after WGWIDE
+# 30/03/2020 updated after HAWG; UNFINISHED. JUST TEMPORARY SOLUTIONS. 
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(rmarkdown) # creating markdown documents
+library(tidyverse) # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(directlabels)  # label graphs
+library(RColorBrewer) # colours
+library(lubridate)
+library(ggrepel)
+
+# Load utils code
+source("../../mptools/r/my utils.r")
+source("iAssess functions.r")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+iAssess <- get(load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))) %>% 
+  
+  # fix for 67bc in 2020
+  mutate(purpose = ifelse(stockkeylabelold=="her-67bc" & assessmentyear==2020, "advice", purpose)) %>% 
+  
+  # fix for North Sea sprat (ignore the realignment)
+  mutate(stockkeylabelold = ifelse(stockkeylabel == "spr.27.3a4","spr-nsea", stockkeylabelold))
+
+iAdvice <- get(load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep="")))
+
+fay <- 2017
+fy  <- 2000
+lay <- 2020
+ly  <- 2020
+
+# iAssess %>% filter(stockkeylabelold=="her-67bc") %>% ungroup() %>% distinct(assessmentyear, purpose)
+# iAssess %>% filter(stockkeylabelold=="spr-nsea") %>% ungroup() %>% distinct(assessmentyear, purpose)
+# iAssess %>% filter(substr(stockkeylabelold,1,3)=="spr") %>% ungroup() %>% distinct(stockkeylabelold, stockkeylabel, assessmentyear, purpose) %>% View()
+
+```
+
+
+**Summary of ICES 2020 WGWIDE assessments and advice**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+
+**EMBARGO**
+
+**THIS DOCUMENT MAY NOT BE SHARED BEFORE THE ICES ADVICE HAS BEEN RELEASED (30 September 2020)**
+
+
+In this document an overview is presented of the ICES assessment and advice that resulted from the ICES Working Group on Widely Distributed Stocks (WGWIDE 2020) which deals with mackerel, blue whiting, horse mackerel and Atlanto-scandian herring. The overviews are based on two databases that have been developed as part of a more comprehensive research effort into the role of fisheries advice in European decision-making: one database containing the history of stock assessments and one database containing the history of scientific advice and management decisions.
+
+**Northeast Atlantic Mackerel**
+
+The new assessment that was carried out in WGWIDE 2020 is consistent with the previous assessment. 
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "mac-nea"
+
+plot_assess(stock=s,assessyear=lay, firstyear=fy, lastyear=ly, 
+            plot = c("stocksize", "fishingpressure", "recruitment"),
+            my.purpose="advice") 
+
+
+```
+
+_Figure 1a Northeast Atlantic mackerel. Summary of most recent assessment_
+
+In previous years, there have been numerous revisions to the assessment of mackerel, leading to benchmarks, interbenchmarks and replace assessments. 
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+# s   <- "mac-nea"
+
+plot_history(stock=s,
+             firstassessyear=fay,
+             lastassessyear=lay, 
+             firstyear=fy, 
+             lastyear=ly, 
+             include.benchmark = TRUE,
+             include.replaced = TRUE,
+             plot = c("stocksize", "fishingpressure")) 
+
+```
+
+_Figure 1b Northeast Atlantic mackerel. History of assessments. Red is most recent assessment, black is earlier assessments, blue is benchmarks and green is replaced assessments. _
+
+##### page break
+
+An overview of advice (red), TAC (or sum of unilateral quota, in blue) and observed catch (green) for NEA mackerel is shown below, both in absolute quantities (tonnes) and in deviations from the (final) ICES advice. Note that the advice may have been changed when an assessment has been replaced after a benchmark was carried out. Deviations from the ICES advice in the order of 20-60% can be observed from 2008 onwards. 
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+plot_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+```
+
+_Figure 1c Northeast Atlantic mackerel. Top: comparison of (max) scientific advice, TAC (or sum of unilateral quota) and Total Catch. Bottom: percentage deviation from ICES advice, CoA is Catch over Advice, ToA is TAC over Advice. _
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+table_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+# [mac.27.nea.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/mac.27.nea.pdf)
+
+```
+
+_Table 1.a Northeast Atlantic mackerel. History of advice, tac and catch._
+
+#####page break
+
+*Blue whiting*
+
+Despite the lack of the 2020 survey observation of the blue whiting survey, the assessment in 2020 appeared to perform well and was very consistent with the previous year. Despite the high catches, the stock is still at a very high level although it is coming down. Low recruitments are coming in for this stock, so further declines in stock size and catches may be expected for the next years.  
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+
+s   <- "whb-comb"
+
+plot_assess(stock=s,assessyear=lay, firstyear=fy, lastyear=ly, 
+            plot = c("stocksize", "fishingpressure", "recruitment"),
+            my.purpose="advice") 
+
+
+```
+
+_Figure 2a Blue whiting. Summary of most recent assessment_
+
+#####page break
+
+The consistency of the assessment compared to the previous years appears to be reasonable. 
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+# s   <- "whb-comb"
+
+plot_history(stock=s,
+             firstassessyear=fay,
+             lastassessyear=lay, 
+             firstyear=fy, 
+             lastyear=ly, 
+             include.benchmark = TRUE, 
+             include.replaced = FALSE, 
+             plot = c("stocksize", "fishingpressure"), 
+             plot.uncertainty=TRUE) 
+
+```
+
+_Figure 2b Blue whiting. History of assessments. Red is most recent assessment and black is earlier assessments. _
+
+##### page break
+
+An overview of advice (red), TAC (or sum of unilateral quota, in blue) and observed catch (green) for blue whiting is shown below, both in absolute quantities (tonnes) and in deviations from the (final) ICES advice. Note that the advice may have been changed when an assessment has been replaced after a benchmark was carried out. Deviations from the ICES advice in the order of 20-60% can be observed from 2014 onwards. Much higher deviations were observed in the beginning of the 2000s.  
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+plot_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+```
+
+_Figure 1c Blue whiting. Top: comparison of (max) scientific advice, TAC (or sum of unilateral quota) and Total Catch. Bottom: percentage deviation from ICES advice, CoA is Catch over Advice, ToA is TAC over Advice. _
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+table_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+# [whb.27.1-91214.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/whb.27.1-91214.pdf)
+
+```
+
+_Table 2 Blue whiting. History of advice, tac and catch._
+
+##### Page break
+
+*Western horse mackerel*
+
+The stock assessment of Western horse mackerel was reasonably with last year's assessment. The retrospective revision is less than during the previous years. The stock is again estimated just above the new Blim and fishing mortality is above Fmsy. The recent recruitments appear to have been somewhat higher which leads to an modest increase in stock size. 
+
+An alternative assessment approach for Western horse mackerel has also been presented in WGWIDE. This is using the SAM assessment model and largely the same data as in the standard assessment model (Stock Synthesis). The trends in the stock and fishing mortality are largely comparable although the absolute levels and uncertainties are different (higher F, lower stock and higher uncertainty in the SAM assessment).  
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "hom-west"
+
+plot_assess(stock=s,
+            assessyear=lay,
+            firstyear=fy,
+            lastyear=ly,
+            plot = c("stocksize", "fishingpressure", "recruitment"),
+            my.purpose="advice")
+
+
+```
+
+_Figure 3a Western horse mackerel. Summary of most recent assessment_
+
+##### page break
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+# s   <- "hom-west"
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly,
+             include.benchmark = TRUE, include.replaced = FALSE,
+             plot = c("stocksize", "fishingpressure"),
+             plot.uncertainty=FALSE)
+
+```
+
+_Figure 3b Western horse mackerel. History of assessments. Red is most recent assessment, black is earlier assessments and blue is benchmarks. _
+
+##### page break
+
+An overview of advice (red), TAC and observed catch (green) for western horse mackerel is shown below, both in absolute quantities (tonnes) and in deviations from the (final) ICES advice. Note that the advice may have been changed when an assessment has been replaced after a benchmark was carried out. Deviations from the ICES advice have been relatively small and not in a specific direction.   
+
+```{r, echo=FALSE, fig.asp=0.8, fig.align="center", message=FALSE, warning=FALSE}
+
+# s   <- "hom-west"
+
+plot_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+# plot_advice(stock="hom-nsea",firstadviceyear=1995,lastadviceyear=lay+1, include.replaced = FALSE)
+
+```
+
+_Figure 1c western horse mackerel. Top: comparison of (max) scientific advice, TAC (or sum of unilateral quota) and Total Catch. Bottom: percentage deviation from ICES advice, CoA is Catch over Advice, ToA is TAC over Advice. _
+
+The advice is based on the new reference points agreed during 2019. Because the stock is between MSY Btrigger and Blim, a lower fishing mortality than Fmsy is used as the basis of the advice, which results in a somewhat lower advice compared to last year. 
+
+The rebuilding plan proposed by the PELAC was presented to WGWIDE, although the formal request to evaluate the rebuilding plan analysis has not been submitted to ICES yet. The preferred HCR option in the PELAC rebuilding plan is included in the forecast table and suggests a yield of around 50 000 tonnes. 
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "hom-west"
+
+table_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+# [hom.27.2a4a5b6a7a-ce-k8.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hom.27.2a4a5b6a7a-ce-k8.pdf)
+
+```
+
+_Table 3 Western horse mackerel. History of advice, tac and catch._
+
+##### page break
+
+*Atlanto-scandian herring*
+
+The stock assessment is consistent with last year's assessment. The stock appears to be slowly declining since 2009. Fishing mortality is estimated to be below Fmsy. There are signs of a reasonable sized incoming year class 2016, but this year class is only just starting to show up in the assessment and the forecast. 
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+s   <- "her-noss"
+
+plot_assess(stock=s,assessyear=lay, firstyear=fy, lastyear=ly, 
+            plot = c("stocksize", "fishingpressure", "recruitment"),
+            my.purpose="advice") 
+
+
+```
+
+_Figure 4a Atlanto-scandian herring. Summary of most recent assessment_
+
+##### page break
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+# s   <- "her-noss"
+
+plot_history(stock=s,
+             firstassessyear=fay,
+             lastassessyear=lay, 
+             firstyear=fy, 
+             lastyear=ly, 
+             include.benchmark = TRUE, 
+             include.replaced = FALSE, 
+             plot = c("stocksize", "fishingpressure"), 
+             plot.uncertainty=TRUE) 
+
+```
+
+_Figure 4b Atlanto-scandian herring. History of assessments. Red is most recent assessment, black is earlier assessments and blue is benchmarks. _
+
+##### page break
+
+An overview of advice (red), TAC (or sum of unilateral quota, in blue) and observed catch (green) for Atlanto-scandian herring  is shown below, both in absolute quantities (tonnes) and in deviations from the (final) ICES advice. Note that the advice may have been changed when an assessment has been replaced after a benchmark was carried out. Deviations from the ICES advice in the order of 20-40% can be observed from 2013 onwards.   
+
+```{r, echo=FALSE, fig.asp=1.0, fig.align="center", message=FALSE, warning=FALSE}
+
+# s   <- "her-noss"
+
+plot_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+```
+
+_Figure 4c Atlanto-scandian herring. Top: comparison of (max) scientific advice, TAC (or sum of unilateral quota) and Total Catch. Bottom: percentage deviation from ICES advice, CoA is Catch over Advice, ToA is TAC over Advice. _
+
+The advice is higher than last year due to the incoming 2016 year class. 
+
+```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
+
+table_advice(stock=s,firstadviceyear=2001,lastadviceyear=lay+1, include.replaced = FALSE)
+
+# [her.27.1-24a514a.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/her.27.1-24a514a.pdf)
+
+```
+
+_Table 4 Atlanto-scandian herring. History of advice, tac and catch._
+
+
+
+*More information*
+
+Please refer to the [ICES website](http://www.ices.dk/community/advisory-process/Pages/Latest-advice.aspx) for an overview of all advice documents. 

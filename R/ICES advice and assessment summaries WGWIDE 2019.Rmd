@@ -323,6 +323,7 @@ plot_history <- function(stock,firstassessyear,lastassessyear, firstyear, lastye
     mutate(
       variable = ifelse(refpoint %in% c("blim","bpa","msybtrigger"), "stocksize", NA),
       variable = ifelse(refpoint %in% c("flim", "fpa", "fmsy"), "fishingpressure", variable) ) %>% 
+    filter(variable %in% plot) %>% 
     mutate(variable = factor(variable, levels=plot, ordered=TRUE)) %>% 
     
     # generate refpoint types

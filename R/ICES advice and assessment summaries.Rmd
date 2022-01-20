@@ -590,76 +590,78 @@ Advice according to the Baltic Multiannual Plan (MAP).
 
 ## Northern Hake
 
-# s   <- "hke-nrtn"
-# 
-# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
-# 
-# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
-# 
-# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
-# 
-# Stock size is well above MSY Btrigger and fishing mortality is below Fmsy. In the past, there has been a tendency to underestimate SSB and overestimate F but this is not the case in the most recent years. 
-# 
-# [hke.27.3a46-8abd.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hke.27.3a46-8abd.pdf)
+s   <- "hke-nrtn"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment"))
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
 
 ```
 
+Stock size is well above MSY Btrigger and fishing mortality is below Fmsy. In the past, there has been a tendency to underestimate SSB and overestimate F but this is not the case in the most recent years. 
+
+[hke.27.3a46-8abd.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/hke.27.3a46-8abd.pdf)
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 
 ## North Sea cod
 
-# s   <- "cod-347d"
-# 
-# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
-# 
-# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
-# 
-# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
-# 
-# The 2018 assessment gave substantially lower estimates of SSB and higher estimates of fishing mortality in recent years. According to the advice document, this is (partially) caused by a lower than expected survey index for the strong 2013 and 2016 year classes in IBTS quarter 1 survey and the IBTS quarter 3 survey. The 2017 SSB is 32% lower compared to the estimate that was presented last year. This also leads to a substantially lower advice for 2019 compared to the advice for 2018. 
-# 
-# [cod.27.47d20.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/cod.27.47d20.pdf)
+s   <- "cod-347d"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment"))
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
 
 ```
+
+The 2018 assessment gave substantially lower estimates of SSB and higher estimates of fishing mortality in recent years. According to the advice document, this is (partially) caused by a lower than expected survey index for the strong 2013 and 2016 year classes in IBTS quarter 1 survey and the IBTS quarter 3 survey. The 2017 SSB is 32% lower compared to the estimate that was presented last year. This also leads to a substantially lower advice for 2019 compared to the advice for 2018.
+
+[cod.27.47d20.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/cod.27.47d20.pdf)
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 
 ## North Sea plaice
 
-# s   <- "ple-nsea"
-# 
-# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
-# 
-# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
-# 
-# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
-# 
-# Stock size is well above MSY Btrigger (and close to 1 million tonnes) and fishing mortality is around Fmsy. An EU multiannual management plan (MAP) has been proposed for this stock (EU, 2016). This plan is not adopted by Norway, thus, not used as the basis of the advice for this shared stock. The advice is based on the MSY approach. 
-# 
-# [ple.27.420.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/ple.27.420.pdf)
+s   <- "ple-nsea"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment"))
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
 
 ```
+
+Stock size is well above MSY Btrigger (and close to 1 million tonnes) and fishing mortality is around Fmsy. An EU multiannual management plan (MAP) has been proposed for this stock (EU, 2016). This plan is not adopted by Norway, thus, not used as the basis of the advice for this shared stock. The advice is based on the MSY approach.
+
+[ple.27.420.pdf](http://ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/ple.27.420.pdf)
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
 
 ## North Sea sole
 
-# s   <- "sol-nsea"
-# 
-# cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
-# 
-# plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment")) 
-# 
-# table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
-# 
-# Stock size above MSY Btrigger, fishing mortality around Fmsy. Advice according to the EU multiannual plan (MAP) for the North Sea. 
-# 
-# [sol.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/sol.27.4.pdf)
+s   <- "sol-nsea"
+
+cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
+
+plot_history(stock=s,firstassessyear=fay,lastassessyear=lay, firstyear=fy, lastyear=ly, include.benchmark = TRUE,               plot = c("stocksize", "fishingpressure", "recruitment"))
+
+table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced=TRUE)
+
 
 ```
+
+Stock size above MSY Btrigger, fishing mortality around Fmsy. Advice according to the EU multiannual plan (MAP) for the North Sea.
+
+[sol.27.4.pdf](http://www.ices.dk/sites/pub/Publication%20Reports/Advice/2019/2019/sol.27.4.pdf)
 
 
 ```{r, echo=FALSE, fig.asp=0.45, fig.align="center", message=FALSE, warning=FALSE}
