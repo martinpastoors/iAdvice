@@ -1,0 +1,197 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# Metadata overview.Rmd
+#
+# 14/11/2022 first coding
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(tidyverse) # for piping and easy coding
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+# library(ggExtra)   # for specific type of plots e.g. ggMarginal
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(RColorBrewer) # colours
+library(lubridate)
+library(scales)
+
+# captioner library
+library(captioner) # deal with captions
+tab_nums <- captioner::captioner(prefix = "Table", levels=2, type=c("n","n"), infix=".")
+fig_nums <- captioner::captioner(prefix = "Figure", levels=2, type=c("n","n"), infix=".")
+
+# Load utils code
+source("../../prf/r/my utils.r")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+# Create subset of series (stocks) to be used for analysis
+d1 <-
+  iAdvice %>%
+  filter(adviceonstock == TRUE) %>% 
+  group_by(speciescommonname, stockkey, stockkeylabelnew, stockkeylabelold) %>% 
+  summarise(
+    nyears          = n_distinct(tacyear),
+    nadvicelandings = sum(!is.na(advisedlandingsmax)),
+    nadvicecatch    = sum(!is.na(advisedcatchmax)),
+    nblim           = sum(!is.na(blim)),
+    nfset           = sum(!is.na(fset)),
+    nssbset         = sum(!is.na(ssbset)),
+  ) %>% 
+  
+  filter(nssbset > 0)
+  
+  # filter stocks
+d2 <-
+  iAdvice %>%
+  filter(stockkey %in% d1$stockkey) %>% 
+  filter(adviceonstock == TRUE) %>% 
+  group_by(speciescommonname, stockkey, stockkeylabelnew, stockkeylabelold, tacyear) %>% 
+  summarise(
+    nblim           = sum(!is.na(blim)),
+    nfmsy           = sum(!is.na(fmsy)),
+    nadvicelandings = sum(!is.na(advisedlandingsmax)),
+    nadvicecatch    = sum(!is.na(advisedcatchmax)),
+    nfset           = sum(!is.na(fset)),
+    nssbset         = sum(!is.na(ssbset)),
+    ntal            = sum(!is.na(tal)),
+    ntac            = sum(!is.na(tac)),
+    nlandings       = sum(!is.na(landings)),
+    ncatch          = sum(!is.na(catches))
+  ) 
+
+d2 %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", nblim:ncatch) %>% 
+  filter(data > 0) %>% 
+  mutate(
+    variable = factor(variable,
+                      levels =c("nblim","nfmsy","nadvicelandings","nadvicecatch", "nfset", "nssbset",
+                                "ntal","ntac","nlandings","ncatch"))
+  ) %>% 
+  
+  ggplot(aes(x=tacyear, y=variable)) +
+  theme_publication() +
+  geom_point() +
+  facet_wrap(~stockkeylabelold)
+
+
+```
+
+
+
+
+<!-- Plot assessment and reconstructions      ------------------------------------------------------ -->
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+# Create subset of series (stocks) to be used for analysis
+a <-
+  iAssess %>%
+  filter(stockkey %in% d1$stockkey) %>% 
+  group_by(stockkey) %>% 
+  filter(assessmentyear == max(assessmentyear, na.rm=TRUE)) %>% 
+  mutate(catch = ifelse(is.na(catches), landings, catches)) %>% 
+  dplyr::select(
+    stockkey, stockkeylabelnew, stockkeylabelold, purpose, assessmentyear, year, 
+    lowstocksize, stocksize, highstocksize,
+    lowfishingpressure, fishingpressure, highfishingpressure,
+    catch
+  ) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", lowstocksize:catch) %>% 
+  mutate(
+    metric = case_when(
+      grepl("low", variable)  ~ "low",
+      grepl("high", variable) ~ "high", 
+      TRUE                    ~ "est"
+    )
+  ) %>% 
+  mutate(variable = gsub("low|high", "", variable)) %>% 
+  pivot_wider(names_from = metric, values_from = data)
+
+d <-
+  iAdvice %>%
+  filter(stockkey %in% d1$stockkey) %>% 
+  filter(adviceonstock == TRUE) %>% 
+  filter(!is.na(fset) | !is.na(ssbset)) %>% 
+  dplyr::select(speciescommonname, stockkey, stockkeylabelnew, stockkeylabelold, year=tacyear, 
+                fishingpressure=fset, stocksize=ssbset, catch=catches) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "est", fishingpressure:catch)
+
+
+for(myvar in c("stocksize", "fishingpressure", "catch")) {
+  p <-
+    ggplot() +
+    theme_publication() +
+    geom_point(data=filter(a, variable == myvar, year >= 2000), 
+               aes(x=year, y=est)) +
+    geom_line(data=filter(a, variable == myvar, year >= 2000), 
+               aes(x=year, y=est)) +
+    
+    geom_point(data=filter(d, variable == myvar, year >= 2000), 
+               aes(x=year, y=est),
+               colour="red") +
+    expand_limits(y=0) +
+    labs(title=myvar) +
+    facet_wrap(~stockkeylabelold, scales="free_y")
+  
+  print(p)
+}
+
+
+```
+
+
+
+```{r, echo=FALSE, fig.asp=0.7, fig.align="center", message=FALSE, warning=FALSE}
+
+c <-
+  a %>% 
+  mutate(source="assessed") %>% 
+  dplyr::select(-purpose, -assessmentyear) %>% 
+  bind_rows(
+    d %>% 
+      mutate(source="predicted")
+  ) %>% 
+  dplyr::select(-low, -high, -speciescommonname) %>% 
+  tidyr::pivot_wider(names_from = source, values_from = est) %>% 
+  drop_na(predicted)
+
+
+myvar <- "stocksize"
+
+for(myvar in c("stocksize", "fishingpressure", "catch")) {
+  p <-
+    c %>% 
+    filter(variable == myvar) %>% 
+    
+    ggplot(aes(x=predicted, y=assessed)) +
+    theme_publication() +
+    geom_point() +
+    geom_abline(slope=1, intercept=0) +
+    expand_limits(x=0, y=0) +
+    labs(title=myvar) +
+    facet_wrap(~stockkeylabelold, scales="free")
+  
+  print(p)
+}
+
+```

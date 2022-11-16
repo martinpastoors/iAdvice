@@ -56,7 +56,7 @@ library(cowplot)       # multiplots
 library(directlabels)  # for printing labels at end of geom lines
 
 # Load utils code
-source("../mptools/r/my utils.r")
+source("../prf/r/my utils.r")
 
 # Set working directory to dropbox folder
 dropboxdir  <- paste(get_dropbox(), "/iAdvice", sep="")
