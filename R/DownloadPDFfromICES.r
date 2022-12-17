@@ -17,23 +17,22 @@ t <-
   readLines(fn) %>% 
   as.data.frame() %>% 
   setNames("string") %>% 
-  filter(grepl("T1 - |L4 - |ER -", string)) %>%
+  filter(grepl("T1 - |L4 - |KW - ", string)) %>%
   separate(string, into=c("code","data"), sep=" - ") %>% 
-  mutate(id = ifelse(row_number()==1,1,NA)) %>% 
+
+  # filter(KW = her.27.etc.)
   
-  # How to deal with records with one T1 and multiple L4?
-  # Can I set an index to each record, e.g. based on ER -?
-  
-  mutate(id = ifelse(is.na(data),lag(id)+1,lag(id))) %>% 
   bind_cols(id = sort(rep(seq(1,230,1),2))) %>% 
   tidyr::pivot_wider(names_from = code, values_from = data) %>% 
+  drop_na(T1) %>% 
   mutate(string = gsub("L4 - ","", string))
 
-class(t)
-glimpse(t)
+i <- 1
+for (i in 1:nrow(t)) {
+  print(paste(t$id[[i]],t$T1[[i]]))
+  httr::GET(t$L4[[i]], write_disk(paste0("C:/TEMP/",t$T1[[i]],".pdf"), overwrite=TRUE))
+}
 
-download.file(t[1], "C:/TEMP/test.pdf")
-httr::GET(t[[1,1]], write_disk("C:/TEMP/test.pdf", overwrite=TRUE))
 httr::GET(t[[2,1]], write_disk("C:/TEMP/test2.pdf", overwrite=TRUE))
 
 # assessmentkeys <- sort(findAssessmentKey(year=myyear))

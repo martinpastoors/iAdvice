@@ -1,0 +1,160 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# ICES assessments averaged.Rmd
+#
+# 06/07/2018 first coding
+# 14/12/2018 updated for the new database structure
+# 01/06/2019 updated for herring advice round
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(rmarkdown) # creating markdown documents
+library(tidyverse) # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(directlabels)  # label graphs
+library(RColorBrewer) # colours
+library(lubridate)
+
+# Load utils code
+source("../../prf/r/my utils.r")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+# Load dataset
+load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+
+
+```
+
+
+**Summary of ICES 2019 assessments and advice**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+iAssess %>% 
+  filter(assessmentyear==2022) %>% 
+  filter(year >= 1980, year < assessmentyear) %>% 
+  filter(stocksizeunits =="tonnes") %>% 
+  
+  group_by(stockkey) %>% 
+  filter(n() >= 41) %>% 
+
+  # filter(grepl("her", stockkeylabelnew)) %>% 
+  # distinct(stockkeylabelnew) %>% write.csv(file="C:/TEMP/stocks.csv", row.names = FALSE)
+
+  group_by(year) %>% 
+  summarise(
+    stocksize       = sum(stocksize, na.rm=TRUE), 
+    fishingpressure = mean(fishingpressure, na.rm=TRUE), 
+    catches           = sum(catches, na.rm=TRUE)
+  ) %>% 
+  pivot_longer(names_to = "variable", values_to = "data", stocksize:catches) %>% 
+  
+  # filter(year >= 2020) %>% View()
+
+  ggplot(aes(x=year, y=data)) +
+  theme_publication() +
+  geom_line(aes()) +
+  expand_limits(y=0) +
+  facet_wrap(~variable, scale="free_y", ncol=1)
+
+
+```
+
+\newpage
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+iAssess %>% 
+  filter(assessmentyear==2022) %>% 
+  filter(year >= 1980, year < assessmentyear) %>% 
+  filter(stocksizeunits =="tonnes") %>% 
+  
+  group_by(stockkey) %>% 
+  filter(n() >= 41) %>% 
+
+  mutate(
+    speciestype = case_when(
+      grepl("cod|had|whg|sai|pol", stockkeylabelnew) ~ "roundfish",
+      grepl("her|mac|whb|hom|anc|pil", stockkeylabelnew) ~ "pelagic",
+      grepl("ple|sol|meg|tur|bll", stockkeylabelnew) ~ "flatfish",
+      TRUE ~ as.character(NA)
+    )
+  ) %>% 
+  drop_na(speciestype) %>% 
+  
+  group_by(speciestype, year) %>% 
+  summarise(
+    stocksize       = sum(stocksize, na.rm=TRUE), 
+    fishingpressure = mean(fishingpressure, na.rm=TRUE), 
+    catches           = sum(catches, na.rm=TRUE)
+  ) %>% 
+  pivot_longer(names_to = "variable", values_to = "data", stocksize:catches) %>% 
+  
+  # filter(year >= 2020) %>% View()
+
+  ggplot(aes(x=year, y=data)) +
+  theme_publication() +
+  geom_line(aes()) +
+  expand_limits(y=0) +
+  facet_wrap(~speciestype+variable, scale="free_y", ncol=3)
+
+
+```
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+t <-
+  iAssess %>% 
+  filter(assessmentyear==2022) %>% 
+  filter(year >= 1980, year < assessmentyear) %>% 
+  filter(stocksizeunits =="tonnes") %>% 
+  filter(purpose=="advice") %>% 
+  
+  group_by(stockkey) %>% 
+  filter(n() >= 41) %>% 
+
+  mutate(
+    speciestype = case_when(
+      grepl("cod|had|whg|sai|pol", stockkeylabelnew) ~ "roundfish",
+      grepl("her|mac|whb|hom|anc|pil", stockkeylabelnew) ~ "pelagic",
+      grepl("ple|sol|meg|tur|bll", stockkeylabelnew) ~ "flatfish",
+      TRUE ~ as.character(NA)
+    )
+  ) %>% 
+  drop_na(speciestype) 
+
+t %>% 
+  dplyr::select(speciestype, stockkeylabelnew, year, stocksize, catches) %>% 
+  pivot_longer(names_to = "variable", values_to = "data", stocksize:catches) %>% 
+  
+  ggplot(aes(x=year, y=data, group=stockkeylabelnew)) +
+  theme_publication() +
+  geom_bar(aes(fill=stockkeylabelnew), stat="identity") +
+  facet_wrap(~speciestype+variable, scales="free_y", ncol=2)
+
+
+
+```
+
