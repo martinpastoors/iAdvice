@@ -194,7 +194,9 @@ plot_history <- function(
      include.replaced=TRUE, 
      plot=c("stocksize","fishingpressure"),
      plot.uncertainty=FALSE,
-     plot.relative=FALSE) {
+     plot.relative=FALSE,
+     plot.title=TRUE,
+     stockkeylabeltype="stockkeylabelold") {
   
   d <-
     iAssess %>% 
@@ -214,7 +216,7 @@ plot_history <- function(
     filter(assessmentyear   %in% c(firstassessyear:lastassessyear)) %>% 
     filter(year             %in% firstyear:lastyear) %>% 
     
-    group_by(assessmentyear) %>% 
+    group_by(stockkeylabel,  stockkeylabelnew, stockkeylabelold, assessmentyear) %>% 
     
     #set type
     mutate(
@@ -236,7 +238,7 @@ plot_history <- function(
     mutate(group = substr(group, 1,3)) %>% 
     mutate(group = gsub("a|l","", group)) %>% 
     
-    dplyr::select(stockkeylabel, stockkeylabelold, stockdescription, 
+    dplyr::select(stockkeylabel,  stockkeylabelnew, stockkeylabelold, stockdescription, 
                   assessmentyear, year, tyear, group, type, purpose,
                   recruitment, lowrecruitment, highrecruitment, unitofrecruitment,
                   stocksize, lowstocksize, highstocksize, stocksizeunits,
@@ -269,7 +271,7 @@ plot_history <- function(
     # select variables to plot
     filter(variable %in% plot) %>% 
     mutate(variable = factor(variable, levels=plot, ordered=TRUE)) %>% 
-    group_by(stockkeylabel, stockkeylabelold, stockdescription, assessmentyear, tyear, group, type, purpose, 
+    group_by(stockkeylabel,  stockkeylabelnew, stockkeylabelold, stockdescription, assessmentyear, tyear, group, type, purpose, 
              variable, esttype) %>% 
   
     # make relative if needed
@@ -292,7 +294,7 @@ plot_history <- function(
     filter(purpose %in% "advice") %>% 
     filter(stockkeylabelold %in% stock | stockkeylabel %in% stock) %>% 
     filter(assessmentyear   == lastassessyear) %>% 
-    dplyr::select(stockkeylabel, stockkeylabelold, assessmentyear,
+    dplyr::select(stockkeylabel,  stockkeylabelnew, stockkeylabelold, assessmentyear,
                   blim, bpa, msybtrigger, flim, fpa, fmsy) %>%
     gather(key=refpoint, value=data, blim:fmsy) %>% 
     
@@ -313,7 +315,7 @@ plot_history <- function(
   # Titles
   tt <-
     d %>% 
-    distinct(variable, unit, stockkeylabel, stockdescription) %>%
+    distinct(variable, unit, stockkeylabel,  stockkeylabelnew, stockkeylabelold, stockdescription) %>%
     filter(!is.na(unit))
   
   # plot
@@ -366,10 +368,20 @@ plot_history <- function(
     
     expand_limits(y = 0) +
     xlim(firstyear,lastyear) +
-    labs(x = NULL, y = NULL, 
-         title = paste0(unique(tt$stockdescription), " (", unique(tt$stockkeylabel),")") ) +
-    facet_wrap(~variable, scales="free_y")
-  
+    {if (plot.title==TRUE) {
+      labs(x = NULL, y = NULL, title = paste0(unique(tt$stockdescription), " (", unique(tt$stockkeylabel),")") )} 
+     else {
+       labs(x = NULL, y = NULL, title = "")   
+      } } +
+    
+    {if (length(stock)==1) {
+      facet_wrap(~variable, scales="free_y")      
+    } else if (length(stock)>1 & length(plot)==1) {
+      facet_wrap(~get(stockkeylabeltype), scales="free_y")       
+    } else {
+      facet_grid(rows=variable, cols= get(stockkeylabeltype), scales="free_y")
+    }}
+
   # return(d)
   
 } # End of plot_history function
@@ -490,14 +502,12 @@ plot_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=F
 
 
 # Function to plot advice overviews
-table_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=FALSE) {
+table_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=FALSE, output.df=FALSE) {
   
   d <-
     iAdvice %>% 
     
     filter(stockkeylabelold %in% stock | stockkeylabel %in% stock) %>% 
-    
-    filter(tacyear %in% firstadviceyear:lastadviceyear) %>% 
     
     {if (include.replaced == TRUE) {
       filter(., purpose %in% c("advice","replaced"))
@@ -508,40 +518,48 @@ table_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=
     mutate(advicebasis= substr(advicebasis,1,25),
            
            advice     = ifelse(!is.na(advisedcatchmax), advisedcatchmax, advisedlandingsmax),
-           advicemax  = ifelse(!is.na(advisedcatchmax), advisedcatchmax, advisedlandingsmax),
+           # advicemax  = ifelse(!is.na(advisedcatchmax), advisedcatchmax, advisedlandingsmax),
            advicetype = ifelse(!is.na(advisedcatchmax), "catch", "landings"),
            
-           tac        = ifelse(!is.na(tac), tac, tal),
            tactype    = ifelse(!is.na(tac), "catch", "landings"), 
+           tac        = ifelse(!is.na(tac), tac, tal),
            
-           catch      = ifelse(!is.na(catches), catches, NA),
            catchtype  = ifelse(!is.na(catches), "catches", ""),
+           catch      = ifelse(!is.na(catches), catches, NA),
            
            catchtype  = ifelse(!is.na(landings) & is.na(catch), "landings", catchtype),
            catch      = ifelse(!is.na(landings) & is.na(catch), landings, catch),
            
-           catchtype  = ifelse(!is.na(officiallandings) & is.na(catch), "officiallandings", catchtype),
-           catch      = ifelse(!is.na(officiallandings) & is.na(catch), officiallandings, catch), 
+           catchtype  = ifelse(!is.na(officiallandings) & is.na(landings) & is.na(catch), "officiallandings", catchtype),
+           catch      = ifelse(!is.na(officiallandings) & is.na(landings) & is.na(catch), officiallandings, catch), 
            
-           adv_c      = 100 * (advicemax / lag(advicemax, n=1) - 1),
-           tac_c      = 100 * (tac /lag(tac, n=1) - 1),
-           cat_c       = 100 * (catch / lag(catch, n=1) -1)
+           adv_c      = 100 * (advice / lag(advice, n=1) - 1),
+           tac_c      = 100 * (tac    / lag(tac, n=1) - 1),
+           cat_c      = 100 * (catch  / lag(catch, n=1) -1),
+           uni_c      = 100 * (unilateralquota  / lag(unilateralquota, n=1) -1)
     ) %>% 
     
-    select(stockkeylabel, tacyear, advicebasis, purpose, advice, fadvmax, advicemax, tac, catch, 
-           adv_c, tac_c, cat_c,
+    filter(tacyear %in% firstadviceyear:lastadviceyear) %>% 
+    
+    select(stockkeylabel, stockkeylabelold, tacyear, advicebasis, purpose, advice, fadvmax, tac, unilateralquota, catch, 
+           adv_c, tac_c, cat_c, uni_c,
            advicetype, tactype, catchtype) 
   
-  d %>% 
-    select("stockkeylabel", "tacyear", "advicebasis", "purpose", "fadvmax", "advicemax", "tac", "catch") %>%
-    arrange(tacyear, desc(purpose)) %>% 
-    pandoc.table(., 
-                 style        = "simple",
-                 split.tables = 200, 
-                 justify      = "right",
-                 missing      =" ",
-                 big.mark     = '', 
-                 round        = c(0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+  if (output.df == FALSE) {
+    d %>% 
+      select("stockkeylabel", "tacyear", "advicebasis", "purpose", "fadvmax", "advicemax", "tac", "catch") %>%
+      arrange(tacyear, desc(purpose)) %>% 
+      pandoc.table(., 
+                   style        = "simple",
+                   split.tables = 200, 
+                   justify      = "right",
+                   missing      =" ",
+                   big.mark     = '', 
+                   round        = c(0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+    
+  } else {
+    return(d)
+  }
 }
 
 # table_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)

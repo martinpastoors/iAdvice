@@ -55,6 +55,8 @@ library(lubridate)     # dates
 library(cowplot)       # multiplots
 library(directlabels)  # for printing labels at end of geom lines
 
+library(icesSD)        # devtools::install_github("ices-tools-prod/icesSD")
+
 # Load utils code
 source("../prf/r/my utils.r")
 
@@ -77,8 +79,8 @@ iAdvice <-
   
   mutate_at(c("advisedlandingsmin", "advisedcatchmin", 
               "advisedlandingsmax", "advisedcatchmax",
-              "tal", "tac",
-              "officiallandings", "landings", "ibc", "discards", "catches",
+              "tal", "tac", "unilateralquota",
+              "officiallandings", "landings", "ibc", "discards", "catches", 
               "fsqimy", "ssbimy", "fadvmax",
               "catchrealized","catch1fcy","catch2fcy","f1fcy","f2fcy","ssb1fcy","ssb2fcy","fset","ssbset",
               "fmax", "f01", "fmed", "f35spr", "flim", "fpa", "fmsy",
@@ -100,7 +102,27 @@ iAdvice <-
   
 save(iAdvice, file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
 
+# skimr::skim(iAdvice)
+# count_not_finite(iAdvice)
+# count_zeroes(iAdvice)
+# inspectdf::inspect_num(iAdvice) %>% inspectdf::show_plot()
+# inspectdf::inspect_imb(iAdvice) %>% inspectdf::show_plot()
+# inspectdf::inspect_cat(iAdvice) %>% inspectdf::show_plot()
+
+# iAdvice %>% group_by(tacyear, adviceonstock) %>% summarise(n=n()) %>% 
+#   ggplot(aes(x=tacyear, y=n, group=tacyear)) + geom_bar(aes(fill=adviceonstock), stat="identity")
+
+# iAdvice %>% group_by(tacyear) %>% 
+#   summarise(
+#     nlandingsadvice=sum(!is.na(advisedlandingsmax)),
+#     ncatchadvice=sum(!is.na(advisedcatchmax)),
+#   ) %>% 
+#   pivot_longer(names_to = "variable", values_to = "n", nlandingsadvice:ncatchadvice) %>% 
+#   ggplot(aes(x=tacyear, y=n, group=tacyear)) + geom_bar(aes(fill=variable), stat="identity") + facet_wrap(~variable)
+
 # glimpse(iAdvice)
+# iAdvice %>% filter(speciescommonname=="salmon") %>% group_by(stockkeylabel, stockkey, assessmentyear) %>% summarise(n=n()) %>% 
+#   pivot_wider(names_from = assessmentyear, values_from = n) %>% View()
 
 # ---------------------------------------------------------------------------------------
 # Read iSpecies from excel (not from ICES SAG because more information added to excel version). 
@@ -132,6 +154,7 @@ iRename <-
   ungroup() %>% 
   dplyr::select(stockkeylabel, stockkey) 
 
+# iRename %>% filter(grepl("sal", stockkeylabel)) %>% View()
 # iRename %>% filter(grepl("had.27", stockkeylabel)) %>% View()
 # iRename %>% filter(grepl("had.27.7b", stockkeylabel)) %>% View()
 # iRename %>% filter(grepl("smn-grl", stockkeylabel)) %>% View()
@@ -207,9 +230,12 @@ save(qcsexcel, file=paste(dropboxdir, "/rdata/qcsexcel.RData",sep=""))
 # -----------------------------------------------------------------------------------------
 
 sd <-
-  get(load(file=paste(dropboxdir, "/rdata/icesSD 20181023.RData",sep=""))) %>% 
+  sd <- icesSD::getSD() %>% 
+  # loadRData(file=paste(dropboxdir, "/rdata/icesSD 20181023.RData",sep="")) %>% 
   lowcase() %>% 
+  drop_na(stockkey) %>% 
   dplyr::select(-stockkey) %>% 
+  distinct() %>% 
   # dplyr::select(-stockkey, -previousstockkey, -previousstockkeylabel, -stockdatabaseid) %>% 
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
   left_join(iStockkey, by="stockkey") %>% 
@@ -457,9 +483,19 @@ iAssess <-
   select(-published.x, -published.y) %>% 
   
   # sorting
-  arrange(speciesfaocode, stockkey, assessmentyear, purpose)
+  arrange(speciesfaocode, stockkey, assessmentyear, purpose) %>% 
+  
+  ungroup() %>% 
+  distinct()
 
 save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
+
+# skimr::skim(iAssess)
+# count_not_finite(iAssess)
+# count_zeroes(iAssess)
+# inspectdf::inspect_num(iAssess) %>% inspectdf::show_plot()
+# inspectdf::inspect_imb(iAssess) %>% inspectdf::show_plot()
+# inspectdf::inspect_cat(iAssess) %>% inspectdf::show_plot()
 
 # iAssess %>% filter(stockkeylabelold=="hom-nsea" & assessmentyear == 2019) %>% View()
 # glimpse(iAssess)
