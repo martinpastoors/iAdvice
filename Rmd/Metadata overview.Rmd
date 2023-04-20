@@ -58,8 +58,10 @@ d1 <-
     nssbset         = sum(!is.na(ssbset)),
   ) %>% 
   
-  filter(nssbset > 0)
-  
+  filter(nssbset > 0 | nfset > 0 )
+ 
+# writexl::write_xlsx(d1, "meta.xlsx") 
+
   # filter stocks
 d2 <-
   iAdvice %>%
@@ -80,6 +82,13 @@ d2 <-
   ) 
 
 d2 %>% 
+  mutate(
+    stockkeylabelold = case_when(
+      stockkeylabelold == "cod-nsea" ~ "cod-347d",
+      stockkeylabelold == "ple-nsea2" ~ "ple-nsea",
+      TRUE                            ~ stockkeylabelold
+    ) 
+  ) %>% 
   tidyr::pivot_longer(names_to = "variable", values_to = "data", nblim:ncatch) %>% 
   filter(data > 0) %>% 
   mutate(

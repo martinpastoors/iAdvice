@@ -36,8 +36,13 @@ source("../../prf/r/my utils.r")
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 # Load dataset
-load(file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
-load(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep=""))
+iAssess <-
+  loadRData(file=paste(dropboxdir, "/rdata/iAssess.RData",sep="")) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold=="ple-nsea2", "ple-nsea", stockkeylabelold))
+  
+iAdvice <-
+  loadRData(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep="")) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold=="ple-nsea2", "ple-nsea", stockkeylabelold))
 
 fay <- 1990
 fy  <- 1990
@@ -318,7 +323,7 @@ Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
 
 ## North Sea sole
 
-s   <- "sol-nsea"
+s   <- "ple-nsea"
 
 cat(filter(iAdvice, stockkeylabelold == s, assessmentyear == lay)$stocklongname)
 
