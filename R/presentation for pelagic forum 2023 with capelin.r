@@ -404,7 +404,7 @@ whbtext2 <- fpar(ftext("Micromesistius poutassou", fp_text(color="white", font.s
 
 my_pres <- my_pres %>% 
   add_slide(layout="Section Header", master="Office Theme") %>%
-  ph_with(value = "Stocks", location = ph_location_type(type = "title")) %>% 
+  ph_with(value = "Species", location = ph_location_type(type = "title")) %>% 
   ph_with(value = external_img(file.path(figuresdir, "mackerel herring blue whiting.png"), width=5, height=4), 
           # location = ph_location_type(type = "pic"),
           location = ph_location(left = 2, top = 2),
@@ -1441,6 +1441,13 @@ ft <-
   mutate(across(names(.)[grepl("data", names(.))], as.integer)) %>% 
   mutate(across(names(.)[grepl("delta", names(.))], ~scales::percent(., accuracy=1))) %>% 
   
+  mutate(adv_delta_2023 = ifelse(stock=="(all)",
+                                 scales::percent(adv_data_2023/adv_data_2022-1, accuracy=1),
+                                 adv_delta_2023)) %>% 
+  mutate(tac_delta_2023 = ifelse(stock=="(all)",
+                                 scales::percent(tac_data_2023/tac_data_2022-1, accuracy=1),
+                                 tac_delta_2023)) %>% 
+  
   flextable::flextable() %>%
   # flextable::set_table_properties(width = 1, layout = "autofit") %>% 
   flextable::fontsize(size = 20, part = "all") %>% 
@@ -1477,30 +1484,6 @@ my_pres <- my_pres %>%
           use_loc_size = FALSE) 
 # ph_with(value = external_img(file.path(figuresdir, "mackerel outlook.png")), 
 #           location = ph_location_type(type = "body"))
-
-fileout <- "test.pptx"
-print(my_pres, target = fileout)
-
-# table_advice(c("whb-comb", "mac-nea","her-47d3", "her-noss"),2020,2023, include.replaced=FALSE, output.df=TRUE) %>% 
-#   writexl::write_xlsx(path="pelagic advice and management.xlsx")
-  
-# final slide
-my_pres <- my_pres %>% 
-  add_slide(layout="Title Slide2", master="Office Theme") %>%
-  ph_with(value = "Thank you", 
-          location = ph_location_type(type = "ctrTitle")) %>% 
-  ph_with(value = "martinpastoors@mpff.nl", 
-          location = ph_location_type(type = "subTitle")) %>% 
-  ph_with(value = external_img(file.path(figuresdir, "DSCN0570 sea.jpg")), 
-          location = ph_location_label(ph_label="Main picture")) 
-
-fileout <- "test.pptx"
-print(my_pres, target = fileout)
-
-
-fileout <- "Pastoors 2023 Northeast Atlantic pelagic stocks.pptx"
-print(my_pres, target = fileout)
-
 
 # =============================================================================================
 # ---------------------------------------------------------------------------------------------
@@ -1641,11 +1624,11 @@ ft <-
     tac_c      = 100 * (tac    / lag(tac, n=1) - 1),
     cat_c      = 100 * (catch  / lag(catch, n=1) -1)  
   ) %>% 
-
+  
   mutate(adv_c = ifelse(is.infinite(adv_c), NA, adv_c)) %>%   
   mutate(across(c("adv_c", "tac_c", "cat_c"), ~scales::percent(./100, accuracy=1))) %>% 
   
-
+  
   flextable::flextable() %>%
   # flextable::set_table_properties(width = 1, layout = "autofit") %>% 
   flextable::fontsize(size = 20, part = "all") %>% 
@@ -1690,7 +1673,21 @@ my_pres <- my_pres %>%
 fileout <- "test.pptx"
 print(my_pres, target = fileout)
 
-fileout <- "Pastoors 2023 Northeast Atlantic pelagic stocks.pptx"
+# final slide
+my_pres <- my_pres %>% 
+  add_slide(layout="Title Slide2", master="Office Theme") %>%
+  ph_with(value = "Thank you", 
+          location = ph_location_type(type = "ctrTitle")) %>% 
+  ph_with(value = "martinpastoors@mpff.nl", 
+          location = ph_location_type(type = "subTitle")) %>% 
+  ph_with(value = external_img(file.path(figuresdir, "DSCN0570 sea.jpg")), 
+          location = ph_location_label(ph_label="Main picture")) 
+
+fileout <- "test.pptx"
+print(my_pres, target = fileout)
+
+
+fileout <- "Pastoors 2023 Northeast Atlantic pelagic stocks with capelin.pptx"
 print(my_pres, target = fileout)
 
 # t <-
