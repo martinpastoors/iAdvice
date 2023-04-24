@@ -14,7 +14,7 @@ library(cowplot)       # multiplots
 library(directlabels)  # for printing labels at end of geom lines
 
 # Load utils code
-source("../mptools/r/my utils.r")
+source("../prf/r/my utils.r")
 
 # Set working directory to dropbox folder
 advicedir  <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -126,3 +126,34 @@ iAdvice %>%
   geom_point(aes(colour=factor(variable))) +
   labs(title = paste0("Reference points: ", mystock)) +
   facet_grid(type~type2, scales="free_y")
+
+# -----------------------------------------------------------------------------------------
+# Plot distance between Blim and Bpa
+# -----------------------------------------------------------------------------------------
+iAdvice %>% 
+  filter(assessmentyear >= 2000) %>%
+  filter(!grepl("bench", purpose)) %>% 
+  # filter(speciesfaocode %in% c("her","mac","whb","hom","hke","cod","ple")) %>%   
+  filter(speciesfaocode %in% c("her","mac","whb","hom")) %>%   
+  filter(blim > 0) %>% 
+  mutate(
+    btrig_blim = msybtrigger/blim,
+    bpa_blim   = bpa/blim,
+    btrig_bpa  = msybtrigger/bpa
+  ) %>%
+  mutate(
+    decade     = 10*floor(assessmentyear/10)
+  ) %>% 
+  dplyr::select(stockkeylabelold, species=speciesfaocode, assessmentyear, decade,
+                blim, bpa, msybtrigger, btrig_blim, bpa_blim, btrig_bpa) %>% 
+  
+  ggplot(aes(x=bpa, y=btrig_bpa)) +
+  # ggplot(aes(x=blim, y=btrig_blim)) +
+  # ggplot(aes(x=blim, y=bpa_blim)) +
+  theme_publication() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_point(aes(colour=species)) +
+  expand_limits(y=0) +
+  facet_wrap(~decade)
+
+

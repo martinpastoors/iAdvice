@@ -500,9 +500,14 @@ plot_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=F
 
 # plot_advice(stock=s,firstadviceyear=fay+1,lastadviceyear=lay+1, include.replaced = TRUE)
 
+# stock=s;firstadviceyear=fay+1;lastadviceyear=lay+1;include.replaced = TRUE; output.df=TRUE
 
 # Function to plot advice overviews
-table_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=FALSE, output.df=FALSE) {
+table_advice <- function(stock,
+                         firstadviceyear,
+                         lastadviceyear, 
+                         include.replaced=FALSE, 
+                         output.df=FALSE) {
   
   d <-
     iAdvice %>% 
@@ -547,7 +552,7 @@ table_advice <- function(stock,firstadviceyear,lastadviceyear, include.replaced=
   
   if (output.df == FALSE) {
     d %>% 
-      select("stockkeylabel", "tacyear", "advicebasis", "purpose", "fadvmax", "advicemax", "tac", "catch") %>%
+      select("stockkeylabel", "tacyear", "advicebasis", "purpose", "fadvmax", "advice", "tac", "catch") %>%
       arrange(tacyear, desc(purpose)) %>% 
       pandoc.table(., 
                    style        = "simple",
