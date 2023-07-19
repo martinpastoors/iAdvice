@@ -11,7 +11,18 @@ library(httr)
 # Load utils code
 source("../prf/r/my utils.r")
 
-fn <- "C:/TEMP/collection_5796935_v93_citations.ris"
+old <- "C:/TEMP/collection_6398177_v28_citations.ris"
+
+# read OLD RIS file
+oldris <-
+  readLines(old) %>%
+  as.data.frame() %>%
+  setNames("string") %>%
+  filter(grepl("L4 - ", string)) %>%
+  separate(string, into=c("code","data"), sep=" - ") 
+
+# new RIS file
+fn <- "C:/TEMP/collection_6398177_v45_citations.ris"
 
 # read RIS file
 ris <-
@@ -52,6 +63,7 @@ l4 <-
   ris %>% 
   filter(code=="L4") %>% 
   filter(grepl("downloader", data)) %>% 
+  filter(data %notin% oldris$data) %>% 
   dplyr::select(-code) %>% 
   left_join(kw) %>% 
   drop_na(name) %>% 
@@ -61,13 +73,14 @@ l4 <-
   mutate(name = ifelse(n>1, paste(name, n, sep="_"), name)) %>% 
   mutate(name = gsub("\\\\|/"," ", name))
 
+
 i <- 1
-# for (i in 1:nrow(l4)) {
-for (i in 1:10) {
+for (i in 1:nrow(l4)) {
+# for (i in 1:10) {
   print(paste(i, l4$data[[i]]))
   
   invisible(
-    httr::GET(l4$data[[i]], write_disk(paste0("C:/TEMP/ACOM 2022 ",l4$name[[i]],".pdf"), overwrite=TRUE))
+    httr::GET(l4$data[[i]], write_disk(paste0("C:/TEMP/ACOM 2023 ",l4$name[[i]],".pdf"), overwrite=TRUE))
   )
 }
 

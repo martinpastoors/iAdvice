@@ -12,7 +12,7 @@ library(directlabels)  # for printing labels at end of geom lines
 library(scales)
 
 # Load utils code
-source("../mptools/r/my_utils.r")
+source("../prf/r/my utils.r")
 
 # Set dropbox folder
 advicedir <- paste(get_dropbox(), "/iAdvice", sep="")
@@ -20,7 +20,28 @@ advicedir <- paste(get_dropbox(), "/iAdvice", sep="")
 # load the data
 load(file=paste(advicedir,"/rdata/iAssess.RData", sep=""))
 
-sort(unique(iAssess$stockkeylabelold))
+# sort(unique(iAssess$stockkeylabelold))
+
+# -----------------------------------------------------------------------------------------
+# number of assessments per stock
+# -----------------------------------------------------------------------------------------
+
+# p <-
+iAssess %>% 
+  ungroup() %>% 
+  distinct(stockkey, stockkeylabel, stockkeylabelold, stockkeylabelnew, assessmentyear, purpose) %>% 
+  group_by(stockkey, stockkeylabel, stockkeylabelold, assessmentyear, purpose) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(y=stockkeylabelold, x=assessmentyear)) +
+  theme_publication() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_point(aes(colour=purpose), alpha=0.5)
+
+# png(filename=file.path("methods_species.png"),
+#     width=9, height=14, units="in", res=300, bg="transparent")
+# plot(p, fit = "fixed", just = "center")
+# dev.off()
+
 
 # ---------------------------------------------------------------------------------------------
 # Historic retros: plot stock data over different assessment years 

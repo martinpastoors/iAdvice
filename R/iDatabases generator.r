@@ -175,6 +175,9 @@ iStockkey <-
 # write.csv(iRename, file=paste(dropboxdir, "/excel/iRename.csv",sep=""), row.names = FALSE)
 # write.csv(iStockkey, file=paste(dropboxdir, "/excel/iStockkey.csv",sep=""), row.names = FALSE)
 
+# load(file=paste(dropboxdir, "/rdata/iRename.RData",sep=""))
+# load(file=paste(dropboxdir, "/rdata/iStockkey.RData",sep=""))
+
 # -----------------------------------------------------------------------------------------
 # load Excel and QSC data
 # -----------------------------------------------------------------------------------------
@@ -230,16 +233,16 @@ save(qcsexcel, file=paste(dropboxdir, "/rdata/qcsexcel.RData",sep=""))
 # -----------------------------------------------------------------------------------------
 
 sd <-
-  sd <- icesSD::getSD() %>% 
-  # loadRData(file=paste(dropboxdir, "/rdata/icesSD 20181023.RData",sep="")) %>% 
-  lowcase() %>% 
-  drop_na(stockkey) %>% 
-  dplyr::select(-stockkey) %>% 
-  distinct() %>% 
-  # dplyr::select(-stockkey, -previousstockkey, -previousstockkeylabel, -stockdatabaseid) %>% 
+  sd <- icesSD::getSD() %>%
+  # loadRData(file=paste(dropboxdir, "/rdata/icesSD 20181023.RData",sep="")) %>%
+  lowcase() %>%
+  drop_na(stockkey) %>%
+  dplyr::select(-stockkey) %>%
+  distinct() %>%
+  # dplyr::select(-stockkey, -previousstockkey, -previousstockkeylabel, -stockdatabaseid) %>%
   left_join(iRename[,c("stockkeylabel","stockkey")], by="stockkeylabel") %>%
-  left_join(iStockkey, by="stockkey") %>% 
-  rename(assessmentyear = activeyear) 
+  left_join(iStockkey, by="stockkey") %>%
+  rename(assessmentyear = activeyear)
 
 
 # -----------------------------------------------------------------------------------------
@@ -538,6 +541,7 @@ save(iAssess, file=paste(dropboxdir, "/rdata/iAssess.RData",sep=""))
 #   distinct(stockkeylabel) %>% 
 #   View()
 
-
+# iAssess %>% filter(assessmentyear==2010, stockkeylabelold=="hke-nrtn") %>% View()
+# qcsexcel_unique %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
 
   

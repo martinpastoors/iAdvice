@@ -18,7 +18,7 @@ library(lubridate)
 # library(ggstance)  # extension to ggplot; vertical extensions; only works for ggplot >= 3.0.0
 
 # Load utils code
-source("../mptools/r/my_utils.r")
+source("../prf/r/my utils.r")
 
 # Set working directory to dropbox folder
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")

@@ -39,9 +39,9 @@ source("../r/iAssess functions.r")
 dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
 
 mystocks <- c("her-47d3", "whb-comb", "mac-nea", "hom-west", 
-              "ple-nsea", "cod-nsea", "sol-nsea","had-nsea")
+              "ple-nsea", "cod-nsea", "sol-nsea","had-nsea", "hke-nrtn")
 
-demstocks <- c("ple-nsea", "cod-nsea", "sol-nsea","had-nsea")
+demstocks <- c("ple-nsea", "cod-nsea", "sol-nsea","had-nsea", "hke-nrtn")
 pelstocks <- c("her-47d3", "whb-comb", "mac-nea", "hom-west")
 
 
@@ -83,9 +83,15 @@ fy  <- 1990
 lay <- 2022
 ly  <- 2021
 
+assessmentyears         <- c(2015, 2020, 2022)
+
 myColors                <- RColorBrewer::brewer.pal(12, "Paired")[c(2:4,6,8,10)]
 names(myColors)         <- c("1990", "2000", "2010", "2020", "2022")
 
+# iAdvice %>% distinct(stockkeylabelold, assessmentyear) %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
+# iAssess %>% distinct(stockkeylabelold, assessmentyear) %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
+
+# iAssess %>% filter(stockkeylabelold=="hke-nrtn", assessmentyear==2010) %>% View()
 
 ```
 
@@ -108,9 +114,29 @@ Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
 
 # Assessment and advice overviews
 
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+iAdvice %>% 
+  group_by(stockkeylabelold, tacyear) %>% 
+  summarize(
+    nF = sum(!is.na(fset)),
+    nSSB = sum(!is.na(ssbset))
+  ) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", nF:nSSB) %>% 
+  # mutate(data = ifelse(data==0, NA, data)) %>% 
+  filter(data > 0) %>% 
+  ggplot(aes(x=tacyear, y=variable)) +
+  theme_publication() +
+  geom_point(aes(colour=variable)) +
+  facet_wrap(~stockkeylabelold)
+
+```
+
 **Demersal stocks**
 
-```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
 
 ## Demersal
 
@@ -166,7 +192,7 @@ for (i in 1:length(demstocks)) {
          )
 }
 
-p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
+p1 + p2 + p3 + p4 + p5 + plot_layout(ncol = 1, guides="collect") &
   theme(legend.position='bottom') 
 
 ```
@@ -226,7 +252,7 @@ for (i in 1:length(pelstocks)) {
                       inherit.aes=FALSE) +
            scale_colour_manual(values=myColors) +
            expand_limits(y=0) +
-           labs(x="",y="", title=demstocks[[i]]) +
+           labs(x="",y="", title=pelstocks[[i]]) +
            facet_wrap(~variable, scales="free_y")
          )
 }
@@ -241,7 +267,7 @@ p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
 
 **Demersal F**
 
-```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
 
 # plot of F against Fset and SSB against SSBset for multiple assessments
 
@@ -261,11 +287,13 @@ d2 <-
   iAssess %>%
   filter(stockkeylabelold %in% demstocks) %>%
   filter(purpose=="advice") %>% 
-  filter(assessmentyear %in% c(2000, 2010, 2020, 2022)) %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
   filter(year >= fay, year <= lay) %>%
   mutate(source=paste0("assess", assessmentyear)) %>% 
   dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
   tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f)
+
+# iAssess %>% filter(stockkeylabelold=="hke-nrtn", assessmentyear==2010) %>% View()
 
 t <-
   d2 %>% 
@@ -309,7 +337,7 @@ for (i in 1:length(demstocks)) {
          )
 }
 
-p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
+p1 + p2 + p3 + p4 + p5 + plot_layout(ncol = 1, guides="collect") &
   theme(legend.position='bottom') 
 
 ```
@@ -318,7 +346,7 @@ p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
 
 **Demersal SSB**
 
-```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
 
 # plot of F against Fset and SSB against SSBset for multiple assessments
 
@@ -338,11 +366,13 @@ d2 <-
   iAssess %>%
   filter(stockkeylabelold %in% demstocks) %>%
   filter(purpose=="advice") %>% 
-  filter(assessmentyear %in% c(2000, 2010, 2020, 2022)) %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
   filter(year >= fay, year <= lay) %>%
   mutate(source=paste0("assess", assessmentyear)) %>% 
   dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
   tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f)
+
+# d2 %>% filter(stockkeylabelold=="hke-nrtn", source=="assess1990") %>% View()
 
 t <-
   d2 %>% 
@@ -386,7 +416,7 @@ for (i in 1:length(demstocks)) {
          )
 }
 
-p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
+p1 + p2 + p3 + p4 + p5 + plot_layout(ncol = 1, guides="collect") &
   theme(legend.position='bottom') 
 
 ```
@@ -415,7 +445,7 @@ d2 <-
   iAssess %>%
   filter(stockkeylabelold %in% pelstocks) %>%
   filter(purpose=="advice") %>% 
-  filter(assessmentyear %in% c(2000, 2010, 2020, 2022)) %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
   filter(year >= fay, year <= lay) %>%
   mutate(source=paste0("assess", assessmentyear)) %>% 
   dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
@@ -492,7 +522,7 @@ d2 <-
   iAssess %>%
   filter(stockkeylabelold %in% pelstocks) %>%
   filter(purpose=="advice") %>% 
-  filter(assessmentyear %in% c(2000, 2010, 2020, 2022)) %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
   filter(year >= fay, year <= lay) %>%
   mutate(source=paste0("assess", assessmentyear)) %>% 
   dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%

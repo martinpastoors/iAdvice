@@ -42,7 +42,7 @@ today <- format(Sys.time(), '%Y%m%d')
 # which year (set year = 0 for all years)
 # =====================================================================================
 
-myyear <- 2022
+myyear <- 2023
 # mystocks <- c("hom.27.2a4a5b6a7a-ce-k8","mac.27.nea","whb.27.1-91214","her.27.1-24a514a")
 
 # Load assessment data
