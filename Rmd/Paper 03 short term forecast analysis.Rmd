@@ -11,6 +11,7 @@ output:
 # Paper 03 short term forecast analysis.Rmd
 #
 # 17/12/2022 first coding
+# August 2023 updated coding
 # -----------------------------------------------------------------------------------------------
 
 require("knitr")
@@ -57,7 +58,9 @@ iAssess <-
   mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("cod-nsea","cod-347d"),
                                    "cod-nsea",
                                    stockkeylabelold)) %>% 
-  filter(stockkeylabelold %in% mystocks)
+  filter(stockkeylabelold %in% mystocks) %>% 
+  mutate(decade = as.character(10 * floor(assessmentyear/10))) 
+
 
   
 # iAdvice %>% ungroup() %>% arrange(stockkeylabelold) %>% distinct(stockkeylabelold) %>% View()
@@ -73,20 +76,21 @@ iAdvice <-
   mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("cod-nsea","cod-347d"),
                                    "cod-nsea",
                                    stockkeylabelold)) %>% 
-  filter(stockkeylabelold %in% mystocks)
+  filter(stockkeylabelold %in% mystocks) %>% 
+  mutate(decade = as.character(10 * floor(tacyear/10))) 
 
 
 # iAdvice %>% ungroup() %>% distinct(stockkeylabelold) %>% filter(grepl("had-",stockkeylabelold)) %>% View()
 
-fay <- 1990
-fy  <- 1990
-lay <- 2022
-ly  <- 2021
+fay <- 1980
+fy  <- 1980
+lay <- 2021
+ly  <- 2020
 
-assessmentyears         <- c(2015, 2020, 2022)
+assessmentyears         <- c(2005, 2010, 2015, 2020)
 
-myColors                <- RColorBrewer::brewer.pal(12, "Paired")[c(2:4,6,8,10)]
-names(myColors)         <- c("1990", "2000", "2010", "2020", "2022")
+myColors                <- RColorBrewer::brewer.pal(12, "Paired")[c(2:4,5, 6,8,10)]
+names(myColors)         <- c("1990", "2000", "2005", "2010", "2015", "2020")
 
 # iAdvice %>% distinct(stockkeylabelold, assessmentyear) %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
 # iAssess %>% distinct(stockkeylabelold, assessmentyear) %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
@@ -114,6 +118,8 @@ Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
 
 # Assessment and advice overviews
 
+Reconstructed F and SSB by stock, calculated from observed catches and implied F and SSB from short term forecasts in different years
+
 ```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
 
 iAdvice %>% 
@@ -123,18 +129,27 @@ iAdvice %>%
     nSSB = sum(!is.na(ssbset))
   ) %>% 
   tidyr::pivot_longer(names_to = "variable", values_to = "data", nF:nSSB) %>% 
-  # mutate(data = ifelse(data==0, NA, data)) %>% 
+  rename(year = tacyear) %>% 
   filter(data > 0) %>% 
-  ggplot(aes(x=tacyear, y=variable)) +
+  
+  bind_rows(
+    iAssess %>% 
+      ungroup() %>% 
+      distinct(stockkeylabelold, assessmentyear) %>% 
+      rename(year = assessmentyear) %>% 
+      mutate(variable = "nAssess", data=1)
+  ) %>% 
+  ggplot(aes(x=year, y=variable)) +
   theme_publication() +
   geom_point(aes(colour=variable)) +
   facet_wrap(~stockkeylabelold)
+
 
 ```
 
 **Demersal stocks**
 
-
+Historical retrospective assessments of demersal stocks
 
 ```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
 
@@ -146,9 +161,8 @@ d1 <-
   filter(stockkeylabelold %in% demstocks) %>%
   filter(adviceonstock) %>%
   filter(tacyear >= fy, tacyear <= ly) %>%
-  dplyr::select(stockkeylabelold, year=tacyear, 
+  dplyr::select(stockkeylabelold, decade, year=tacyear, 
                 f=fset, ssb=ssbset) %>%
-  mutate(decade = as.character(10 * floor(year/10))) %>% 
   mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), 
                                width=2, pad="0")) %>% 
   tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) %>% 
@@ -161,9 +175,8 @@ d2 <-
   filter(purpose=="advice") %>% 
   # filter(assessmentyear == max(assessmentyear)) %>%
   filter(year >= fy, year <= ly) %>%
-  dplyr::select(stockkeylabelold, assessmentyear, year, 
+  dplyr::select(stockkeylabelold, decade, assessmentyear, year, 
                 ssb=stocksize, f=fishingpressure, rec=recruitment) %>%
-  mutate(decade = as.character(10 * floor(assessmentyear/10))) %>% 
   tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:rec) %>% 
   mutate(variable = factor(variable, levels=c("ssb","f","rec")))
 
@@ -177,6 +190,11 @@ for (i in 1:length(demstocks)) {
             
            ggplot(aes(x=year, y=data, group=assessmentyear)) +
            theme_publication() +
+           theme(plot.margin = unit(c(0,0,0,0), "cm")) +
+           theme(plot.title = element_text(size=12)) +
+           theme(panel.spacing.x = unit(0.1, "mm"), panel.spacing.y = unit(0.1, "mm")) +
+
+           
            geom_line(aes(colour=decade)) +
            geom_point(data=filter(d1, stockkeylabelold == demstocks[[i]]), 
                       aes(x=year, y=data, colour=decade),
@@ -192,8 +210,10 @@ for (i in 1:length(demstocks)) {
          )
 }
 
-p1 + p2 + p3 + p4 + p5 + plot_layout(ncol = 1, guides="collect") &
-  theme(legend.position='bottom') 
+p1 + p2 + p3 + p4 + p5 + 
+  plot_layout(ncol = 1, guides="collect") &
+  theme(legend.position='bottom') &
+  theme(plot.margin = unit(c(0,0,0,0), "cm")) 
 
 ```
 

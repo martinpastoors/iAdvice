@@ -1,0 +1,684 @@
+---
+output: 
+  word_document:
+    reference_docx: ../report_template_v1.5.dotx
+---
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+
+# -----------------------------------------------------------------------------------------------
+# Paper 03 short term forecast analysis.Rmd
+#
+# 17/12/2022 first coding
+# August 2023 updated coding
+# -----------------------------------------------------------------------------------------------
+
+require("knitr")
+knitr::opts_chunk$set(echo = FALSE,	message = FALSE,	warning = FALSE,	comment = "",	crop = TRUE )
+knitr::opts_chunk$set(fig.width=10) 
+knit_hooks$set(crop = hook_pdfcrop)
+
+# Libraries
+library(rmarkdown) # creating markdown documents
+library(tidyverse) # combined package of dplyr, tidyr, ggplot, readr, purrr and tibble
+library(reshape2)  # reshaping data; e.g. dcast
+library(ggthemes)  # for themes
+library(pander)    # for print tables
+library(readxl)    # read excel files
+library(cowplot)   # multiplots
+library(directlabels)  # label graphs
+library(RColorBrewer) # colours
+library(lubridate)
+library(ggrepel)
+library(patchwork)
+
+# Load utils code
+source("../../prf/r/my utils.r")
+source("../r/iAssess functions.r")
+
+dropboxdir <- paste(get_dropbox(), "/iAdvice", sep="")
+
+mystocks <- c("her-47d3", "whb-comb", "mac-nea", "hom-west", 
+              "ple-nsea", "cod-nsea", "sol-nsea","had-nsea", "hke-nrtn")
+
+demstocks <- c("ple-nsea", "cod-nsea", "sol-nsea","had-nsea", "hke-nrtn")
+pelstocks <- c("her-47d3", "whb-comb", "mac-nea", "hom-west")
+
+fay <- 1980
+fy  <- 1980
+lay <- 2023
+ly  <- 2023
+
+# Load dataset
+iAssess <-
+  loadRData(file=paste(dropboxdir, "/rdata/iAssess.RData",sep="")) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold=="ple-nsea2", 
+                                   "ple-nsea", 
+                                   stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("had-nsea","had-34","had-346a"),
+                                   "had-nsea",
+                                   stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("cod-nsea","cod-347d"),
+                                   "cod-nsea",
+                                   stockkeylabelold)) %>% 
+  filter(purpose == "advice") %>% 
+  filter(stockkeylabelold %in% mystocks) %>% 
+  filter(year >= assessmentyear -9, year < assessmentyear) %>% 
+  
+  mutate(decade = as.character(10 * floor(assessmentyear/10))) %>% 
+  mutate(pentad = as.character(5 * floor(assessmentyear/5))) %>% 
+  arrange(stockkeylabelold, assessmentyear, year) %>% 
+  dplyr::select(stockkeylabelold, purpose, decade, pentad, assessmentyear, year, 
+              ssb=stocksize, f=fishingpressure, rec=recruitment) %>%
+  group_by(stockkeylabelold, pentad) %>% 
+  filter(assessmentyear == max(assessmentyear, na.rm=TRUE)) %>% 
+  ungroup()
+
+# iAssess %>% filter(stockkeylabelold == "cod-nsea", pentad=="2010") %>% View()
+
+# add intermediate year from iAdvice database
+iAssess2 <-
+  loadRData(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep="")) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold=="ple-nsea2", 
+                                   "ple-nsea", 
+                                   stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("had-nsea","had-34","had-346a"),
+                                   "had-nsea",
+                                   stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("cod-nsea","cod-347d"),
+                                   "cod-nsea",
+                                   stockkeylabelold)) %>% 
+  filter(adviceonstock == TRUE & purpose=="advice") %>% 
+  filter(stockkeylabelold %in% mystocks) %>% 
+  filter(tacyear >= fy, tacyear <= ly) %>%
+  rename(ssb = ssbimy, f = fsqimy) %>% 
+  mutate(year = assessmentyear + 1) %>% 
+  mutate(pentad = as.character(5 * floor(year/5))) %>% 
+  mutate(decade = as.character(10 * floor(year/10))) %>% 
+  dplyr::select(stockkeylabelold, purpose, decade, pentad, assessmentyear, year, ssb, f)
+
+# iAssess %>% ungroup() %>% arrange(stockkeylabelold) %>% distinct(stockkeylabelold, decade, assessmentyear) %>% View()
+# iAssess %>% group_by(stockkeylabelold, decade, assessmentyear) %>% summarise(minyear = min(year), maxyear = max(year)) %>% View()
+
+iAdvice <-
+  loadRData(file=paste(dropboxdir, "/rdata/iAdvice.RData",sep="")) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold=="ple-nsea2", 
+                                   "ple-nsea", 
+                                   stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("had-nsea","had-34","had-346a"),
+                                   "had-nsea",
+                                   stockkeylabelold)) %>% 
+  mutate(stockkeylabelold = ifelse(stockkeylabelold %in% c("cod-nsea","cod-347d"),
+                                   "cod-nsea",
+                                   stockkeylabelold)) %>% 
+  filter(adviceonstock == TRUE & purpose == "advice") %>% 
+  filter(stockkeylabelold %in% mystocks) %>% 
+  filter(tacyear >= fy, tacyear <= ly) %>%
+  
+  rename(year = tacyear) %>% 
+
+  mutate(pentad = as.character(5 * floor(year/5))) %>% 
+  mutate(decade = as.character(10 * floor(year/10))) %>% 
+  arrange(stockkeylabelold, year) %>% 
+  dplyr::select(stockkeylabelold, purpose, decade, pentad, assessmentyear, year, 
+              ssb=ssbset, f=fset) %>%
+  ungroup()
+
+
+# iAdvice %>% ungroup() %>% distinct(stockkeylabelold) %>%  View()
+# iAdvice %>% distinct(pentad) %>% View()
+# iAdvice %>% filter(pentad==1975) %>% View()
+
+# year strings
+assessmentyears         <- iAdvice %>% distinct(pentad, year) %>% group_by(pentad) %>% filter(year == max(year)) %>% pull(year)
+pentadyears             <- iAdvice %>% distinct(pentad) %>% pull(pentad)
+
+# colours
+myColors                <- RColorBrewer::brewer.pal(12, "Paired")[1:length(pentadyears)]
+names(myColors)         <- pentadyears
+
+# scales::show_col(RColorBrewer::brewer.pal(12, "Paired"))
+
+# iAdvice %>% distinct(stockkeylabelold, assessmentyear) %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
+
+# iAssess %>% distinct(stockkeylabelold, assessmentyear) %>% filter(stockkeylabelold=="hke-nrtn") %>% View()
+# iAssess %>% filter(stockkeylabelold=="hke-nrtn", assessmentyear==2010) %>% View()
+
+```
+
+
+**Paper 03 Short term forecast analysis**
+
+Martin Pastoors, `r format(Sys.time(), '%d/%m/%Y')`
+
+<!--Section 1: introduction ------------------------------------------------------------------- -->
+
+# Introduction
+
+
+<!--Section 2: material and methods ----------------------------------------------------------- -->
+
+# Material and methods
+
+
+<!--Section 3: advice and assessment overviews ------------------------------------------------ -->
+
+# Assessment and advice overviews
+
+Reconstructed F and SSB by stock, calculated from observed catches and implied F and SSB from short term forecasts in different years
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+iAdvice %>% 
+  group_by(stockkeylabelold, year) %>% 
+  summarize(
+    nSTF_F = sum(!is.na(f)),
+    nSTF_SSB = sum(!is.na(ssb))
+  ) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", nSTF_F:nSTF_SSB) %>% 
+  filter(data > 0) %>% 
+  
+  bind_rows(
+    iAssess %>% 
+      ungroup() %>% 
+      distinct(stockkeylabelold, assessmentyear) %>% 
+      rename(year = assessmentyear) %>% 
+      mutate(variable = "nAssess", data=1)
+  ) %>% 
+  
+  ggplot(aes(x=year, y=variable)) +
+  theme_publication() +
+  theme(legend.position = "none") +
+  geom_point(aes(colour=variable)) +
+  facet_wrap(~stockkeylabelold)
+
+
+```
+
+**Demersal stocks**
+
+Historical retrospective assessments of demersal stocks (SSB)
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+## Demersal
+my_var <- "f"
+
+# advice
+d1 <-
+  iAdvice %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  # filter(stockkeylabelold == "cod-nsea") %>% 
+  mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), 
+                               width=2, pad="0")) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) %>% 
+  mutate(variable = factor(variable, levels=c("ssb","f","rec"))) %>% 
+  
+  filter(variable == my_var) 
+
+# assess
+d2 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  # filter(stockkeylabelold == "cod-nsea") %>% 
+
+  group_by(stockkeylabelold, pentad) %>% 
+  filter(assessmentyear == max(assessmentyear)) %>% 
+  
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:rec) %>% 
+  mutate(variable = factor(variable, levels=c("ssb","f","rec"))) %>% 
+  
+  filter(variable == my_var) 
+
+# iAssess %>% filter(stockkeylabelold == "cod-nsea", pentad=="2010") %>% View()
+
+# IMY assumptions for ssb and F
+d3 <-
+  iAssess2 %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  # filter(stockkeylabelold == "cod-nsea") %>% 
+
+  group_by(stockkeylabelold, pentad) %>% 
+  filter(assessmentyear == max(assessmentyear)) %>% 
+  
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) %>% 
+  mutate(variable = factor(variable, levels=c("ssb","f"))) %>% 
+  
+  filter(variable == my_var) 
+
+# connecting last assessment point with IMY assumptions
+d4 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  # filter(stockkeylabelold == "cod-nsea") %>% 
+
+  group_by(stockkeylabelold, pentad) %>% 
+  filter(assessmentyear == max(assessmentyear)) %>% 
+  filter(year == max(year)) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) %>% 
+  mutate(variable = factor(variable, levels=c("ssb","f"))) %>% 
+  
+  bind_rows(d3) %>% 
+  
+  filter(variable == my_var) 
+  
+
+int_breaks <- function(x, n = 5) {
+  l <- pretty(x, n)
+  l[abs(l %% 1) < .Machine$double.eps ^ 0.5] 
+}
+
+d2 %>% 
+  ggplot(aes(x=year, y=data, group=assessmentyear)) +
+  theme_publication() +
+  theme(plot.margin = unit(c(0,0,0,0), "cm")) +
+  theme(plot.title = element_text(size=12)) +
+  theme(panel.spacing.x = unit(0.1, "mm"), panel.spacing.y = unit(0.1, "mm")) +
+  theme(legend.position = "none") +
+
+ 
+  geom_line(aes(colour=pentad), alpha=1) +
+  ggrepel::geom_text_repel(
+             data=d2 %>% group_by(stockkeylabelold, decade, pentad, assessmentyear) %>% filter(row_number()==1),
+             aes(x=year, y=data, colour=pentad, label=assessmentyear),
+             inherit.aes=FALSE) +
+  geom_point(data=d3, 
+             aes(x=year, y=data, colour=pentad),
+             inherit.aes=FALSE, alpha=1, shape=1) +
+  geom_line(data=d4, 
+             aes(x=year, y=data, colour=pentad),
+             inherit.aes=FALSE, alpha=1, linetype="dotted") +
+  geom_point(data=d1,
+             aes(x=year, y=data, colour=pentad),
+             inherit.aes=FALSE, alpha=1) +
+  ggrepel::geom_text_repel(
+             data=d1,
+             aes(x=year, y=data, colour=pentad, label=yr),
+             inherit.aes=FALSE) +
+  expand_limits(y=0) +
+  scale_colour_manual(values=myColors) +
+  scale_x_continuous(breaks = int_breaks) +
+  labs(x="",y="", title=my_var) +
+  # facet_wrap(~pentad, scales="free")
+  facet_grid(stockkeylabelold~pentad, scales="free")
+
+```
+
+\newpage
+
+**Pelagic stocks**
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+## Pelagic
+
+# advice
+d1 <-
+  iAdvice %>%
+  filter(stockkeylabelold %in% pelstocks) %>%
+  filter(adviceonstock) %>%
+  filter(tacyear >= fy, tacyear <= ly) %>%
+  dplyr::select(stockkeylabelold, year=tacyear, 
+                f=fset, ssb=ssbset) %>%
+  mutate(decade = as.character(10 * floor(year/10))) %>% 
+  mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), 
+                               width=2, pad="0")) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) %>% 
+  mutate(variable = factor(variable, levels=c("ssb","f","rec")))
+
+# assess
+d2 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% pelstocks) %>%
+  filter(purpose=="advice") %>% 
+  # filter(assessmentyear == max(assessmentyear)) %>%
+  filter(year >= fy, year <= ly) %>%
+  dplyr::select(stockkeylabelold, assessmentyear, year, 
+                ssb=stocksize, f=fishingpressure, rec=recruitment) %>%
+  mutate(decade = as.character(10 * floor(assessmentyear/10))) %>% 
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:rec) %>% 
+  mutate(variable = factor(variable, levels=c("ssb","f","rec")))
+
+
+i <- 1
+for (i in 1:length(pelstocks)) {
+
+  assign(paste0("p",i),
+         d2 %>% 
+           filter(stockkeylabelold == pelstocks[[i]]) %>% 
+            
+           ggplot(aes(x=year, y=data, group=assessmentyear)) +
+           theme_publication() +
+           geom_line(aes(colour=decade)) +
+           geom_point(data=filter(d1, stockkeylabelold == pelstocks[[i]]), 
+                      aes(x=year, y=data, colour=decade),
+                      inherit.aes=FALSE) +
+           ggrepel::geom_text_repel(
+                      data=filter(d1, stockkeylabelold == pelstocks[[i]]),
+                      aes(x=year, y=data, colour=decade, label=yr),
+                      inherit.aes=FALSE) +
+           scale_colour_manual(values=myColors) +
+           expand_limits(y=0) +
+           labs(x="",y="", title=pelstocks[[i]]) +
+           facet_wrap(~variable, scales="free_y")
+         )
+}
+
+p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
+  theme(legend.position='bottom') 
+
+```
+
+
+\newpage
+
+**Demersal F**
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of F against Fset and SSB against SSBset for multiple assessments
+
+mytype    <- "Demersal"
+myvar     <- "f"
+  
+d1 <-
+  iAdvice %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  filter(adviceonstock) %>%
+  filter(tacyear >= fay, tacyear <= lay) %>%
+  dplyr::select(stockkeylabelold, year=tacyear, f=fset, ssb=ssbset) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) 
+
+
+d2 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  filter(purpose=="advice") %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
+  filter(year >= fay, year <= lay) %>%
+  mutate(source=paste0("assess", assessmentyear)) %>% 
+  dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f)
+
+# iAssess %>% filter(stockkeylabelold=="hke-nrtn", assessmentyear==2010) %>% View()
+
+t <-
+  d2 %>% 
+  left_join(d1, by=c("stockkeylabelold", "year", "variable")) %>% 
+  rename(
+    assess=data.x,
+    forecast=data.y
+  ) %>% 
+  drop_na(forecast) %>% 
+  mutate(decade = as.character(10 * floor(year / 10))) %>% 
+  mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), width=2, pad="0")) 
+
+# maxssb<- t %>% filter(variable=="ssb") %>% ungroup() %>% 
+#   summarise(maxssb=max(assess, forecast, na.rm=TRUE)) %>% 
+#   as.numeric()
+
+i <- 1
+for (i in 1:length(demstocks)) {
+
+  max  <- t %>% 
+    filter(variable==myvar) %>% 
+    filter(stockkeylabelold == demstocks[[i]]) %>% 
+    ungroup() %>%
+    summarise(max=max(assess, forecast, na.rm=TRUE)) %>%
+    as.numeric()
+  
+  assign(paste0("p",i),
+         t %>% 
+           filter(variable == myvar) %>% 
+           filter(stockkeylabelold == demstocks[[i]]) %>% 
+            
+           ggplot(aes(x=assess, y=forecast)) +
+           theme_publication() +
+           geom_point(aes(colour=decade)) +
+           ggrepel::geom_text_repel(aes(colour=decade, label=yr)) +
+           scale_colour_manual(values=myColors) +
+           geom_abline(slope=1, intercept=0, linetype="dashed", linewidth=0.5) +
+           scale_x_continuous(limits=c(0,max)) +
+           scale_y_continuous(limits=c(0,max)) +
+           facet_grid(stockkeylabelold~source)
+         )
+}
+
+p1 + p2 + p3 + p4 + p5 + plot_layout(ncol = 1, guides="collect") &
+  theme(legend.position='bottom') 
+
+```
+
+\newpage
+
+**Demersal SSB**
+
+```{r, echo=FALSE, fig.asp=1.4, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of F against Fset and SSB against SSBset for multiple assessments
+
+mytype    <- "Demersal"
+myvar     <- "ssb"
+
+d1 <-
+  iAdvice %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  filter(adviceonstock) %>%
+  filter(tacyear >= fay, tacyear <= lay) %>%
+  dplyr::select(stockkeylabelold, year=tacyear, f=fset, ssb=ssbset) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) 
+
+
+d2 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% demstocks) %>%
+  filter(purpose=="advice") %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
+  filter(year >= fay, year <= lay) %>%
+  mutate(source=paste0("assess", assessmentyear)) %>% 
+  dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f)
+
+# d2 %>% filter(stockkeylabelold=="hke-nrtn", source=="assess1990") %>% View()
+
+t <-
+  d2 %>% 
+  left_join(d1, by=c("stockkeylabelold", "year", "variable")) %>% 
+  rename(
+    assess=data.x,
+    forecast=data.y
+  ) %>% 
+  drop_na(forecast) %>% 
+  mutate(decade = as.character(10 * floor(year / 10))) %>% 
+  mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), width=2, pad="0")) 
+
+# maxssb<- t %>% filter(variable=="ssb") %>% ungroup() %>% 
+#   summarise(maxssb=max(assess, forecast, na.rm=TRUE)) %>% 
+#   as.numeric()
+
+i <- 1
+for (i in 1:length(demstocks)) {
+
+  max  <- t %>% 
+    filter(variable==myvar) %>% 
+    filter(stockkeylabelold == demstocks[[i]]) %>% 
+    ungroup() %>%
+    summarise(max=max(assess, forecast, na.rm=TRUE)) %>%
+    as.numeric()
+  
+  assign(paste0("p",i),
+         t %>% 
+           filter(variable == myvar) %>% 
+           filter(stockkeylabelold == demstocks[[i]]) %>% 
+            
+           ggplot(aes(x=assess, y=forecast)) +
+           theme_publication() +
+           geom_point(aes(colour=decade)) +
+           ggrepel::geom_text_repel(aes(colour=decade, label=yr)) +
+           scale_colour_manual(values=myColors) +
+           geom_abline(slope=1, intercept=0, linetype="dashed", linewidth=0.5) +
+           scale_x_continuous(limits=c(0,max)) +
+           scale_y_continuous(limits=c(0,max)) +
+           facet_grid(stockkeylabelold~source)
+         )
+}
+
+p1 + p2 + p3 + p4 + p5 + plot_layout(ncol = 1, guides="collect") &
+  theme(legend.position='bottom') 
+
+```
+
+\newpage
+
+**Pelagic F**
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of F against Fset and SSB against SSBset for multiple assessments
+
+mytype    <- "Pelagic"
+myvar     <- "f"
+  
+d1 <-
+  iAdvice %>%
+  filter(stockkeylabelold %in% pelstocks) %>%
+  filter(adviceonstock) %>%
+  filter(tacyear >= fay, tacyear <= lay) %>%
+  dplyr::select(stockkeylabelold, year=tacyear, f=fset, ssb=ssbset) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) 
+
+
+d2 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% pelstocks) %>%
+  filter(purpose=="advice") %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
+  filter(year >= fay, year <= lay) %>%
+  mutate(source=paste0("assess", assessmentyear)) %>% 
+  dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f)
+
+t <-
+  d2 %>% 
+  left_join(d1, by=c("stockkeylabelold", "year", "variable")) %>% 
+  rename(
+    assess=data.x,
+    forecast=data.y
+  ) %>% 
+  drop_na(forecast) %>% 
+  mutate(decade = as.character(10 * floor(year / 10))) %>% 
+  mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), width=2, pad="0")) 
+
+# maxssb<- t %>% filter(variable=="ssb") %>% ungroup() %>% 
+#   summarise(maxssb=max(assess, forecast, na.rm=TRUE)) %>% 
+#   as.numeric()
+
+i <- 1
+for (i in 1:length(pelstocks)) {
+
+  max  <- t %>% 
+    filter(variable==myvar) %>% 
+    filter(stockkeylabelold == pelstocks[[i]]) %>% 
+    ungroup() %>%
+    summarise(max=max(assess, forecast, na.rm=TRUE)) %>%
+    as.numeric()
+  
+  assign(paste0("p",i),
+         t %>% 
+           filter(variable == myvar) %>% 
+           filter(stockkeylabelold == pelstocks[[i]]) %>% 
+            
+           ggplot(aes(x=assess, y=forecast)) +
+           theme_publication() +
+           geom_point(aes(colour=decade)) +
+           ggrepel::geom_text_repel(aes(colour=decade, label=yr)) +
+           scale_colour_manual(values=myColors) +
+           geom_abline(slope=1, intercept=0, linetype="dashed", linewidth=0.5) +
+           scale_x_continuous(limits=c(0,max)) +
+           scale_y_continuous(limits=c(0,max)) +
+           facet_grid(stockkeylabelold~source)
+         )
+}
+
+p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
+  theme(legend.position='bottom') 
+
+```
+
+\newpage
+
+**Pelagic SSB**
+
+```{r, echo=FALSE, fig.asp=1.2, fig.align="center", message=FALSE, warning=FALSE}
+
+# plot of F against Fset and SSB against SSBset for multiple assessments
+
+mytype    <- "Pelagic"
+myvar     <- "ssb"
+
+d1 <-
+  iAdvice %>%
+  filter(stockkeylabelold %in% pelstocks) %>%
+  filter(adviceonstock) %>%
+  filter(tacyear >= fay, tacyear <= lay) %>%
+  dplyr::select(stockkeylabelold, year=tacyear, f=fset, ssb=ssbset) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f) 
+
+
+d2 <-
+  iAssess %>%
+  filter(stockkeylabelold %in% pelstocks) %>%
+  filter(purpose=="advice") %>% 
+  filter(assessmentyear %in% assessmentyears) %>% 
+  filter(year >= fay, year <= lay) %>%
+  mutate(source=paste0("assess", assessmentyear)) %>% 
+  dplyr::select(stockkeylabelold, year, ssb=stocksize, f=fishingpressure, source) %>%
+  tidyr::pivot_longer(names_to = "variable", values_to = "data", ssb:f)
+
+t <-
+  d2 %>% 
+  left_join(d1, by=c("stockkeylabelold", "year", "variable")) %>% 
+  rename(
+    assess=data.x,
+    forecast=data.y
+  ) %>% 
+  drop_na(forecast) %>% 
+  mutate(decade = as.character(10 * floor(year / 10))) %>% 
+  mutate(yr = stringr::str_pad(ifelse(year >=2000, year-2000, year-1900), width=2, pad="0")) 
+
+# maxssb<- t %>% filter(variable=="ssb") %>% ungroup() %>% 
+#   summarise(maxssb=max(assess, forecast, na.rm=TRUE)) %>% 
+#   as.numeric()
+
+i <- 1
+for (i in 1:length(pelstocks)) {
+
+  max  <- t %>% 
+    filter(variable==myvar) %>% 
+    filter(stockkeylabelold == pelstocks[[i]]) %>% 
+    ungroup() %>%
+    summarise(max=max(assess, forecast, na.rm=TRUE)) %>%
+    as.numeric()
+  
+  assign(paste0("p",i),
+         t %>% 
+           filter(variable == myvar) %>% 
+           filter(stockkeylabelold == pelstocks[[i]]) %>% 
+            
+           ggplot(aes(x=assess, y=forecast)) +
+           theme_publication() +
+           geom_point(aes(colour=decade)) +
+           ggrepel::geom_text_repel(aes(colour=decade, label=yr)) +
+           scale_colour_manual(values=myColors) +
+           geom_abline(slope=1, intercept=0, linetype="dashed", linewidth=0.5) +
+           scale_x_continuous(limits=c(0,max)) +
+           scale_y_continuous(limits=c(0,max)) +
+           facet_grid(stockkeylabelold~source)
+         )
+}
+
+p1 + p2 + p3 + p4 + plot_layout(ncol = 1, guides="collect") &
+  theme(legend.position='bottom') 
+
+```
